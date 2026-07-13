@@ -1,0 +1,10 @@
+.env
+.env*.local
+.next
+node_modules
+out
+dist
+output
+.static-work
+*.log
+tsconfig.tsbuildinfo
