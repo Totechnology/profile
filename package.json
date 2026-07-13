@@ -21,9 +21,7 @@
     "react": "latest",
     "react-dom": "latest",
     "tailwindcss": "latest",
-    "three": "^0.185.1"
-  },
-  "devDependencies": {
+    "three": "^0.185.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
