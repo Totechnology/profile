@@ -1,7 +1,6 @@
-import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { AdminLogin } from "@/components/admin/AdminLogin";
-import { contentStore } from "@/lib/contentStore";
 import { isAdminAuthenticated } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,10 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   const authed = await isAdminAuthenticated();
 
-  if (!authed) {
-    return <AdminLogin />;
-  }
+  if (authed) redirect("/admin/dashboard");
 
-  const content = await contentStore.getContent();
-  return <AdminDashboard initialContent={content} />;
+  return <AdminLogin />;
 }

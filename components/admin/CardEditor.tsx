@@ -7,6 +7,7 @@ import type {
   LifeCardItem,
   SectionKey,
   SkillCardItem,
+  StoredFileReference,
   ThoughtCardItem
 } from "@/lib/types";
 
@@ -39,6 +40,38 @@ function stringifyList(value: unknown) {
   return Array.isArray(value) ? value.join("\n") : "";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isStoredFileReference(value: unknown): value is StoredFileReference {
+  return (
+    isRecord(value) &&
+    typeof value.fileID === "string" &&
+    typeof value.cloudPath === "string" &&
+    typeof value.url === "string" &&
+    typeof value.size === "number" &&
+    typeof value.mimeType === "string"
+  );
+}
+
+function parseUploadPayload(payload: unknown) {
+  if (!isRecord(payload)) return null;
+
+  const candidate = isRecord(payload.file)
+    ? payload.file
+    : isRecord(payload.data)
+      ? payload.data
+      : payload;
+
+  if (typeof candidate.url !== "string" || !candidate.url) return null;
+
+  return {
+    url: candidate.url,
+    reference: isStoredFileReference(candidate) ? candidate : undefined
+  };
+}
+
 export function CardEditor({
   section,
   item,
@@ -67,9 +100,26 @@ export function CardEditor({
     return Array.from(new Set([...images, cover].filter(Boolean))).slice(0, MAX_ENTRY_IMAGES);
   }
 
-  function updateImages(images: string[]) {
+  function getStorageFiles() {
+    return Array.isArray(record.storageFiles)
+      ? record.storageFiles.filter(isStoredFileReference)
+      : [];
+  }
+
+  function updateImages(images: string[], addedFiles: StoredFileReference[] = []) {
     const next = Array.from(new Set(images.map((image) => image.trim()).filter(Boolean))).slice(0, MAX_ENTRY_IMAGES);
-    onChange({ ...item, image: next[0] || "", images: next } as EditableItem);
+    const filesByUrl = new Map(
+      [...getStorageFiles(), ...addedFiles]
+        .filter((file) => next.includes(file.url))
+        .map((file) => [file.url, file])
+    );
+
+    onChange({
+      ...item,
+      image: next[0] || "",
+      images: next,
+      storageFiles: Array.from(filesByUrl.values())
+    } as EditableItem);
   }
 
   async function uploadImageFile(file: File) {
@@ -82,13 +132,14 @@ export function CardEditor({
     });
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      setUploadError(payload?.message || "图片上传失败");
-      return "";
+      const payload = (await response.json().catch(() => null)) as unknown;
+      setUploadError(isRecord(payload) && typeof payload.message === "string" ? payload.message : "图片上传失败");
+      return null;
     }
 
-    const payload = (await response.json()) as { url: string };
-    return payload.url;
+    const uploaded = parseUploadPayload(await response.json());
+    if (!uploaded) setUploadError("上传已完成，但服务器没有返回有效的图片地址。");
+    return uploaded;
   }
 
   async function uploadImages(files: FileList | null) {
@@ -102,21 +153,24 @@ export function CardEditor({
     }
 
     const selectedFiles = Array.from(files).slice(0, remainingSlots);
-    const uploaded: string[] = [];
+    const uploaded: Array<{ url: string; reference?: StoredFileReference }> = [];
     setUploading(true);
     setUploadError(files.length > remainingSlots ? `最多还能上传 ${remainingSlots} 张，已自动保留前 ${remainingSlots} 张。` : "");
 
     try {
       for (const file of selectedFiles) {
-        const url = await uploadImageFile(file);
-        if (url) uploaded.push(url);
+        const result = await uploadImageFile(file);
+        if (result) uploaded.push(result);
       }
     } finally {
       setUploading(false);
     }
 
     if (uploaded.length) {
-      updateImages([...currentImages, ...uploaded]);
+      updateImages(
+        [...currentImages, ...uploaded.map((entry) => entry.url)],
+        uploaded.flatMap((entry) => (entry.reference ? [entry.reference] : []))
+      );
     }
   }
 
@@ -174,7 +228,7 @@ export function CardEditor({
             <input
               className="sr-only"
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
               multiple
               disabled={uploading || getImages().length >= MAX_ENTRY_IMAGES}
               onChange={(event) => {
@@ -229,11 +283,28 @@ export function CardEditor({
           />
           设为 featured 重点卡片
         </label>
+        <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-secondary-foreground">
+          <input
+            className="h-4 w-4 accent-[var(--primary)]"
+            type="checkbox"
+            checked={record.visible !== false}
+            onChange={(event) => update("visible", event.target.checked)}
+          />
+          在公开页面显示
+        </label>
         <span className="mono text-xs text-muted-foreground">ID: {item.id}</span>
       </div>
 
       {input("title", "标题")}
-      {input("createdAt", "创建日期", "2026-07-07")}
+      <label className="admin-label">
+        创建时间（系统维护）
+        <input
+          className="admin-input cursor-not-allowed opacity-70"
+          value={textValue("createdAt")}
+          placeholder="首次保存时生成"
+          readOnly
+        />
+      </label>
       {imageField("照片图集")}
 
       {section === "skills" ? (

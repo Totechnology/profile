@@ -1,7 +1,11 @@
 .git
 .next
+.content
+.static-work
 node_modules
 output
+out
+coverage
 .env
 .env.*
 !.env.example

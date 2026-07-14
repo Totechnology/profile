@@ -1,18 +1,25 @@
 import type { NextConfig } from "next";
 
-const isStaticExport = process.env.STATIC_EXPORT === "1";
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
-  output: isStaticExport ? "export" : "standalone",
-  trailingSlash: isStaticExport,
+  output: "standalone",
   images: {
-    unoptimized: isStaticExport,
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**"
+        hostname: "**.tcb.qcloud.la",
+        pathname: "/personal-portfolio/**"
+      },
+      {
+        protocol: "https",
+        hostname: "**.cos.ap-shanghai.myqcloud.com",
+        pathname: "/personal-portfolio/**"
+      },
+      {
+        protocol: "https",
+        hostname: "**.tcloudbaseapp.com",
+        pathname: "/personal-portfolio/**"
       }
     ]
   }

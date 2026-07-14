@@ -13,19 +13,24 @@ export function AdminLogin() {
     setLoading(true);
     setError("");
 
-    const response = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password })
-    });
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+      });
 
-    setLoading(false);
-    if (!response.ok) {
-      setError("密码不正确，或服务器未配置 ADMIN_PASSWORD。");
-      return;
+      if (!response.ok) {
+        setError("登录失败，请检查密码后重试。");
+        return;
+      }
+
+      window.location.assign("/admin/dashboard");
+    } catch {
+      setError("暂时无法连接服务器，请稍后重试。");
+    } finally {
+      setLoading(false);
     }
-
-    window.location.reload();
   }
 
   return (

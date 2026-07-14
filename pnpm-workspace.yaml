@@ -1,4 +1,6 @@
 allowBuilds:
+  core-js-pure: true
   sharp: true
 onlyBuiltDependencies:
+  - core-js-pure
   - sharp

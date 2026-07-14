@@ -1,17 +1,8 @@
 {
   "version": "2.0",
-  "envId": "xingyun-d0gzx0472a109b6b0",
+  "envId": "travel-media-gallery-d1a83223409",
   "$schema": "https://framework-1258016615.tcloudbaseapp.com/schema/latest.json",
   "cloudrun": {
-    "name": "profile"
-  },
-  "app": {
-    "serviceName": "profile",
-    "root": ".",
-    "framework": "static",
-    "installCommand": "",
-    "buildCommand": "",
-    "outputDir": "./out",
-    "deployPath": "/profile"
+    "name": "personal-portfolio"
   }
 }

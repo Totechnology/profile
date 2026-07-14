@@ -21,7 +21,7 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN mkdir -p .content && pnpm build
+RUN pnpm build
 
 FROM node:22-alpine AS runner
 
@@ -38,10 +38,6 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/.content ./.content
-
-RUN mkdir -p .content public/uploads \
-  && chown -R nextjs:nodejs .content public/uploads
 
 USER nextjs
 

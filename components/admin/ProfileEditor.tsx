@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ProfileMeta, SectionShowcase, SiteContent } from "@/lib/types";
+import type { ProfileMeta, SectionShowcase, SiteContent, StoredFileReference } from "@/lib/types";
 
 const showcaseOrder: Array<keyof SiteContent["showcases"]> = ["skills", "experiences", "thoughts", "life"];
 
@@ -29,6 +29,38 @@ function parseContactLinks(value: string) {
 
 function stringifyContactLinks(value: ProfileMeta["contactLinks"]) {
   return value.map((link) => `${link.label} | ${link.href}`).join("\n");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isStoredFileReference(value: unknown): value is StoredFileReference {
+  return (
+    isRecord(value) &&
+    typeof value.fileID === "string" &&
+    typeof value.cloudPath === "string" &&
+    typeof value.url === "string" &&
+    typeof value.size === "number" &&
+    typeof value.mimeType === "string"
+  );
+}
+
+function parseUploadPayload(payload: unknown) {
+  if (!isRecord(payload)) return null;
+
+  const candidate = isRecord(payload.file)
+    ? payload.file
+    : isRecord(payload.data)
+      ? payload.data
+      : payload;
+
+  if (typeof candidate.url !== "string" || !candidate.url) return null;
+
+  return {
+    url: candidate.url,
+    reference: isStoredFileReference(candidate) ? candidate : undefined
+  };
 }
 
 export function ProfileEditor({
@@ -64,6 +96,17 @@ export function ProfileEditor({
     });
   };
 
+  const updatePortraitImage = (url: string, file?: StoredFileReference) => {
+    onChange({
+      ...content,
+      profile: {
+        ...content.profile,
+        portraitImage: url,
+        portraitFile: file ?? (content.profile.portraitFile?.url === url ? content.profile.portraitFile : undefined)
+      }
+    });
+  };
+
   const input = (key: keyof ProfileMeta, label: string, placeholder = "") => (
     <label className="admin-label">
       {label}
@@ -91,13 +134,20 @@ export function ProfileEditor({
     setUploadingPortrait(false);
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      setPortraitUploadError(payload?.message || "头像上传失败");
+      const payload = (await response.json().catch(() => null)) as unknown;
+      setPortraitUploadError(
+        isRecord(payload) && typeof payload.message === "string" ? payload.message : "头像上传失败"
+      );
       return;
     }
 
-    const payload = (await response.json()) as { url: string };
-    updateProfile("portraitImage", payload.url);
+    const uploaded = parseUploadPayload(await response.json());
+    if (!uploaded) {
+      setPortraitUploadError("上传已完成，但服务器没有返回有效的头像地址。");
+      return;
+    }
+
+    updatePortraitImage(uploaded.url, uploaded.reference);
   }
 
   const portraitField = (
@@ -107,7 +157,7 @@ export function ProfileEditor({
         <input
           className="admin-input"
           value={content.profile.portraitImage}
-          onChange={(event) => updateProfile("portraitImage", event.target.value)}
+          onChange={(event) => updatePortraitImage(event.target.value)}
           placeholder="/uploads/avatar.png 或 https://..."
         />
         <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -127,7 +177,7 @@ export function ProfileEditor({
             <input
               className="sr-only"
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
               disabled={uploadingPortrait}
               onChange={(event) => {
                 const file = event.target.files?.[0];

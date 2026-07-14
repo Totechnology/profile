@@ -5,6 +5,21 @@ export type ContactLink = {
   href: string;
 };
 
+export type StoredFileReference = {
+  fileID: string;
+  cloudPath: string;
+  url: string;
+  size: number;
+  mimeType: string;
+};
+
+export type ContentItemMeta = {
+  slug?: string;
+  visible?: boolean;
+  updatedAt?: string;
+  storageFiles?: StoredFileReference[];
+};
+
 export type ProfileMeta = {
   name: string;
   title: string;
@@ -17,6 +32,7 @@ export type ProfileMeta = {
   contactLinks: ContactLink[];
   footerLine: string;
   portraitImage: string;
+  portraitFile?: StoredFileReference;
 };
 
 export type SectionShowcase = {
@@ -30,7 +46,7 @@ export type SectionShowcase = {
   accent?: string;
 };
 
-export type SkillCardItem = {
+export type SkillCardItem = ContentItemMeta & {
   id: string;
   title: string;
   description: string;
@@ -44,7 +60,7 @@ export type SkillCardItem = {
   order?: number;
 };
 
-export type ExperienceCardItem = {
+export type ExperienceCardItem = ContentItemMeta & {
   id: string;
   title: string;
   createdAt?: string;
@@ -61,7 +77,7 @@ export type ExperienceCardItem = {
   order?: number;
 };
 
-export type ThoughtCardItem = {
+export type ThoughtCardItem = ContentItemMeta & {
   id: string;
   title: string;
   summary: string;
@@ -77,7 +93,7 @@ export type ThoughtCardItem = {
   order?: number;
 };
 
-export type LifeCardItem = {
+export type LifeCardItem = ContentItemMeta & {
   id: string;
   title: string;
   image?: string;
@@ -105,6 +121,33 @@ export type SectionItemMap = {
   experiences: ExperienceCardItem;
   thoughts: ThoughtCardItem;
   life: LifeCardItem;
+};
+
+export type PortfolioSection = "capabilities" | "experience" | "thoughts" | "life";
+
+export type PortfolioItem = SectionItemMap[SectionKey];
+
+export type PortfolioItemDocument = Record<string, unknown> & {
+  _id: string;
+  id: string;
+  migrationKey?: string;
+  section: PortfolioSection;
+  type: string;
+  title: string;
+  slug?: string;
+  order: number;
+  visible: boolean;
+  featured: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SiteSettingsDocument = {
+  _id: "main";
+  profile: ProfileMeta;
+  showcases: Record<SectionKey, SectionShowcase>;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export const sectionLabels: Record<SectionKey, string> = {
