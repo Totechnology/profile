@@ -5,14 +5,9 @@ import { Header } from "@/components/layout/Header";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { EntryDetailPage } from "@/components/sections/EntryDetailPage";
 import { contentStore } from "@/lib/contentStore";
-import { findBySlug, getEntrySlug } from "@/lib/slugs";
+import { findBySlug } from "@/lib/slugs";
 
 export const dynamic = "force-dynamic";
-
-export async function generateStaticParams() {
-  const content = await contentStore.getContent();
-  return content.skills.map((item) => ({ slug: getEntrySlug(item) }));
-}
 
 export default async function CapabilityEntryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

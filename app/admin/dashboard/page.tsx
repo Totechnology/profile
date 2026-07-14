@@ -9,16 +9,16 @@ export const dynamic = "force-dynamic";
 export default async function AdminDashboardPage() {
   if (!(await isAdminAuthenticated())) redirect("/admin");
 
-  const [content, items] = await Promise.all([
-    contentStore.getContent(),
-    contentStore.getAllItems()
+  const [content, storeState] = await Promise.all([
+    contentStore.getContent({ includeHidden: true }),
+    contentStore.getState()
   ]);
 
   return (
     <AdminDashboard
       initialContent={content}
-      canSeed={process.env.ALLOW_CLOUDBASE_SEED === "true"}
-      seedNeeded={items.length === 0}
+      canSeed={process.env.ALLOW_CLOUDBASE_SEED?.trim().toLowerCase() === "true" && storeState.mode === "cloudbase"}
+      seedNeeded={storeState.empty}
     />
   );
 }

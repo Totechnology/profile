@@ -1,6 +1,7 @@
 import type { ExperienceCardItem, LifeCardItem, SkillCardItem, ThoughtCardItem } from "@/lib/types";
 
 type SlugSource = Pick<SkillCardItem | ExperienceCardItem | ThoughtCardItem | LifeCardItem, "id"> & {
+  slug?: string;
   createdAt?: string;
   date?: string;
   time?: string;
@@ -15,7 +16,7 @@ export function cleanSlug(value: string) {
 }
 
 export function getEntrySlug(item: SlugSource) {
-  return cleanSlug(item.createdAt || item.date || item.time || item.id) || item.id;
+  return cleanSlug(item.slug || item.createdAt || item.date || item.time || item.id) || item.id;
 }
 
 export function findBySlug<T extends SlugSource>(items: T[], slug: string) {

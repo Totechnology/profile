@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { apiErrorResponse } from "@/lib/api/errors";
+import { destroyAdminSession } from "@/lib/auth/admin-session";
 
 export const runtime = "nodejs";
 
 export async function POST() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0
-  });
-  return response;
+  try {
+    await destroyAdminSession();
+    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return apiErrorResponse(error, "admin-logout");
+  }
 }

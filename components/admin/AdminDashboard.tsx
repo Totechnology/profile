@@ -28,21 +28,30 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
 
   async function saveContent() {
     setStatus("saving");
-    const response = await fetch("/api/admin/content", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content })
-    });
+    try {
+      const response = await fetch("/api/admin/content", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content })
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setStatus("error");
+        return;
+      }
+
+      const payload = (await response.json()) as { content?: SiteContent };
+      if (!payload.content) {
+        setStatus("error");
+        return;
+      }
+
+      setContent(payload.content);
+      setStatus("saved");
+      window.setTimeout(() => setStatus("idle"), 1400);
+    } catch {
       setStatus("error");
-      return;
     }
-
-    const payload = (await response.json()) as { content: SiteContent };
-    setContent(payload.content);
-    setStatus("saved");
-    window.setTimeout(() => setStatus("idle"), 1400);
   }
 
   async function logout() {
@@ -91,7 +100,7 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
                 disabled={seedStatus === "seeding" || status === "saving"}
               >
                 {seedStatus === "seeding" ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={1.8} />
+                  <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" strokeWidth={1.8} />
                 ) : (
                   <DatabaseZap className="h-4 w-4" strokeWidth={1.8} />
                 )}

@@ -511,26 +511,12 @@ data/
 
 ## 内容存储
 
-当前 MVP 版本使用本地 JSON 文件保存后台内容。
+生产环境使用腾讯云 CloudBase 文档数据库持久化后台内容：
 
-默认路径：
+* `portfolio_items`：个人能力、个人经历、学习思考和个人生活卡片
+* `portfolio_settings`：个人档案、联系方式和首页配置，固定文档 ID 为 `main`
 
-```txt
-.content/site-content.json
-```
-
-注意：
-
-如果部署到 Vercel 等无持久文件写入环境，本地 JSON 保存可能失效。
-
-后续建议替换为：
-
-* Supabase
-* Notion
-* Sanity
-* Firebase
-* PostgreSQL
-* 自建 CMS
+用户上传的内容图片保存在 CloudBase 云存储的 `personal-portfolio/` 前缀下。`.content/site-content.json` 只允许用于本地开发回退和首次迁移源，不是云托管生产数据源。
 
 内容存储逻辑应集中在：
 
@@ -616,19 +602,16 @@ pnpm install
 
 复制 `.env.example` 为 `.env.local`。
 
-至少设置：
+设置：
 
-```bash
-ADMIN_PASSWORD=your-password
-AUTH_SECRET=your-long-random-secret
+```dotenv
+CLOUDBASE_ENV_ID=travel-media-gallery-d1a83223409
+ADMIN_PASSWORD=replace-me
+AUTH_SECRET=replace-with-long-random-secret
+ALLOW_CLOUDBASE_SEED=false
 ```
 
-建议：
-
-```bash
-NEXT_PUBLIC_SITE_NAME=龚宸宇个人主页
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-```
+不要提交真实密码或 `AUTH_SECRET`，也不要创建包含密码或私密凭证的 `NEXT_PUBLIC_*` 环境变量。`ALLOW_CLOUDBASE_SEED` 只在首次迁移期间临时开启。
 
 ---
 
@@ -662,11 +645,7 @@ ADMIN_PASSWORD
 
 登录后可以管理四个板块中的卡片内容。
 
-后台内容默认保存到：
-
-```txt
-.content/site-content.json
-```
+云托管生产环境保存到 CloudBase 的 `portfolio_items` 和 `portfolio_settings`；图片保存到 `personal-portfolio/uploads/`。
 
 ---
 
@@ -774,13 +753,7 @@ Connecting visuals, sound, hardware and AI into working systems.
 
 ### 内容管理升级
 
-将本地 JSON 替换为：
-
-* Supabase
-* Sanity
-* Notion
-* Firebase
-* PostgreSQL
+当前已使用 CloudBase 文档数据库和云存储。后续可在不改变集合边界的前提下增加内容审核、版本记录和定时发布。
 
 ### 作品展示升级
 
@@ -841,14 +814,8 @@ Connecting visuals, sound, hardware and AI into working systems.
 
 ---
 
-## 静态网站构建与托管
+## CloudBase 云托管
 
-生成可直接上传到 GitHub Pages、腾讯云 CloudBase 静态托管或其他静态主机的版本：
+生产环境作为完整 Next.js 服务部署到环境 `travel-media-gallery-d1a83223409` 中的独立云托管服务 `personal-portfolio`，端口为 `3000`。本项目不使用 CloudBase 静态托管，以保留管理员认证、内容 API 和数据库持久化能力。
 
-```bash
-pnpm build:static
-```
-
-构建产物位于 `out/`。静态构建会保留首页、四个内容板块和全部公开详情页，并把当前 `.content/site-content.json` 内容写入页面。
-
-`/admin` 与 `/api` 依赖服务端运行，静态托管版本不会包含这两个路径。需要在线使用管理后台时，请继续使用 `pnpm build && pnpm start` 的服务端版本；在后台修改内容后，重新运行静态构建并部署 `out/` 即可更新公开站点。
+完整的控制台配置、存储权限合并、数据初始化、部署验收和回滚步骤见 [CloudBase 云托管部署与迁移](docs/cloudbase-deployment.md)。

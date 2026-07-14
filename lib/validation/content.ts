@@ -1,4 +1,13 @@
-import type { PortfolioSection, SiteContent } from "@/lib/types";
+import type {
+  ContactLink,
+  PortfolioSection,
+  ProfileMeta,
+  SectionKey,
+  SectionShowcase,
+  SiteContent,
+  SiteSettingsDocument,
+  StoredFileReference
+} from "@/lib/types";
 import { badRequest } from "@/lib/api/errors";
 
 const PORTFOLIO_SECTIONS = new Set<PortfolioSection>([
@@ -9,7 +18,7 @@ const PORTFOLIO_SECTIONS = new Set<PortfolioSection>([
 ]);
 
 const UNSAFE_KEYS = new Set(["__proto__", "prototype", "constructor"]);
-const CREATE_RESERVED_KEYS = new Set(["_id", "createdAt", "updatedAt", "migrationKey"]);
+const CREATE_RESERVED_KEYS = new Set(["_id", "id", "createdAt", "updatedAt", "migrationKey"]);
 const UPDATE_RESERVED_KEYS = new Set([
   "_id",
   "id",
@@ -22,7 +31,6 @@ const UPDATE_RESERVED_KEYS = new Set([
 type JsonObject = Record<string, unknown>;
 
 export type CreatePortfolioItemInput = JsonObject & {
-  id?: string;
   section: PortfolioSection;
   type: string;
   title: string;
@@ -35,10 +43,7 @@ export type ReorderPortfolioItemsInput = {
   orderedIds: string[];
 };
 
-export type SiteSettingsPatch = {
-  profile?: JsonObject;
-  showcases?: JsonObject;
-};
+export type SiteSettingsPatch = Partial<Pick<SiteSettingsDocument, "profile" | "showcases">>;
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -95,6 +100,83 @@ function requireString(value: unknown, label: string, maxLength: number) {
   return result;
 }
 
+function requireStringArray(value: unknown, label: string, maxItems = 100) {
+  if (!Array.isArray(value) || value.length > maxItems) {
+    badRequest(`${label}必须是文本数组。`, "INVALID_PAYLOAD");
+  }
+  return value.map((entry, index) => requireString(entry, `${label}[${index}]`, 240));
+}
+
+function validateStoredFile(value: unknown, label: string): StoredFileReference {
+  const file = requireObject(value, label);
+  if (typeof file.size !== "number" || !Number.isFinite(file.size) || file.size < 0) {
+    badRequest(`${label}.size 不正确。`, "INVALID_PAYLOAD");
+  }
+  return {
+    fileID: requireString(file.fileID, `${label}.fileID`, 1_024),
+    cloudPath: requireString(file.cloudPath, `${label}.cloudPath`, 1_024),
+    url: requireString(file.url, `${label}.url`, 4_096),
+    size: file.size,
+    mimeType: requireString(file.mimeType, `${label}.mimeType`, 120)
+  };
+}
+
+function validateProfile(value: unknown): ProfileMeta {
+  const profile = requireObject(value, "settings.profile");
+  if (!Array.isArray(profile.contactLinks) || profile.contactLinks.length > 50) {
+    badRequest("settings.profile.contactLinks 必须是联系方式数组。", "INVALID_PAYLOAD");
+  }
+  const contactLinks: ContactLink[] = profile.contactLinks.map((entry, index) => {
+    const link = requireObject(entry, `settings.profile.contactLinks[${index}]`);
+    return {
+      label: requireString(link.label, `settings.profile.contactLinks[${index}].label`, 120),
+      href: requireString(link.href, `settings.profile.contactLinks[${index}].href`, 4_096)
+    };
+  });
+
+  return {
+    name: requireString(profile.name, "settings.profile.name", 120),
+    title: requireString(profile.title, "settings.profile.title", 240),
+    description: requireString(profile.description, "settings.profile.description", 10_000),
+    supportText: requireString(profile.supportText, "settings.profile.supportText", 10_000),
+    location: requireString(profile.location, "settings.profile.location", 240),
+    status: requireString(profile.status, "settings.profile.status", 240),
+    disciplines: requireStringArray(profile.disciplines, "settings.profile.disciplines"),
+    tags: requireStringArray(profile.tags, "settings.profile.tags"),
+    contactLinks,
+    footerLine: requireString(profile.footerLine, "settings.profile.footerLine", 1_000),
+    portraitImage: requireString(profile.portraitImage, "settings.profile.portraitImage", 4_096),
+    portraitFile:
+      profile.portraitFile === undefined
+        ? undefined
+        : validateStoredFile(profile.portraitFile, "settings.profile.portraitFile")
+  };
+}
+
+function validateShowcases(value: unknown): Record<SectionKey, SectionShowcase> {
+  const showcases = requireObject(value, "settings.showcases");
+  const keys: SectionKey[] = ["skills", "experiences", "thoughts", "life"];
+  const output = {} as Record<SectionKey, SectionShowcase>;
+
+  for (const key of keys) {
+    const showcase = requireObject(showcases[key], `settings.showcases.${key}`);
+    output[key] = {
+      key,
+      title: requireString(showcase.title, `settings.showcases.${key}.title`, 240),
+      eyebrow: requireString(showcase.eyebrow, `settings.showcases.${key}.eyebrow`, 240),
+      description: requireString(showcase.description, `settings.showcases.${key}.description`, 10_000),
+      href: requireString(showcase.href, `settings.showcases.${key}.href`, 4_096),
+      image: requireString(showcase.image, `settings.showcases.${key}.image`, 4_096),
+      metric: requireString(showcase.metric, `settings.showcases.${key}.metric`, 240),
+      accent:
+        showcase.accent === undefined
+          ? undefined
+          : requireString(showcase.accent, `settings.showcases.${key}.accent`, 240)
+    };
+  }
+  return output;
+}
+
 export function validateIdentifier(value: unknown, label = "ID") {
   const id = requireString(value, label, 128);
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(id)) {
@@ -128,7 +210,6 @@ export function validateCreatePortfolioItem(value: unknown): CreatePortfolioItem
     title: requireString(item.title, "item.title", 240)
   } as CreatePortfolioItemInput;
 
-  if (item.id !== undefined) result.id = validateIdentifier(item.id, "item.id");
   if (item.order !== undefined && (!Number.isInteger(item.order) || Number(item.order) < 0)) {
     badRequest("item.order 必须是非负整数。", "INVALID_PAYLOAD");
   }
@@ -192,8 +273,8 @@ export function validateSettingsPatch(value: unknown): SiteSettingsPatch {
   }
 
   const patch: SiteSettingsPatch = {};
-  if (settings.profile !== undefined) patch.profile = cleanObject(settings.profile, "settings.profile");
-  if (settings.showcases !== undefined) patch.showcases = cleanObject(settings.showcases, "settings.showcases");
+  if (settings.profile !== undefined) patch.profile = validateProfile(settings.profile);
+  if (settings.showcases !== undefined) patch.showcases = validateShowcases(settings.showcases);
   return patch;
 }
 
@@ -215,5 +296,5 @@ export function validateSiteContent(value: unknown): SiteContent {
     }
   }
 
-  return content as SiteContent;
+  return content as unknown as SiteContent;
 }
