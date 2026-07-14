@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { AdminUnauthorizedError } from "@/lib/auth/admin-session";
 
+const noStoreHeaders = { "Cache-Control": "no-store" };
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -30,14 +32,14 @@ export function apiErrorResponse(error: unknown, context: string) {
     const message = "请先登录管理后台。";
     return NextResponse.json(
       { ok: false, message, error: { code: "UNAUTHORIZED", message } },
-      { status: 401 }
+      { status: 401, headers: noStoreHeaders }
     );
   }
 
   if (error instanceof ApiError) {
     return NextResponse.json(
       { ok: false, message: error.message, error: { code: error.code, message: error.message } },
-      { status: error.status }
+      { status: error.status, headers: noStoreHeaders }
     );
   }
 
@@ -49,21 +51,21 @@ export function apiErrorResponse(error: unknown, context: string) {
     const message = "请求的内容不存在。";
     return NextResponse.json(
       { ok: false, message, error: { code: "NOT_FOUND", message } },
-      { status: 404 }
+      { status: 404, headers: noStoreHeaders }
     );
   }
   if (code === "CONTENT_CONFLICT") {
     const message = "内容已发生变化，请刷新后重试。";
     return NextResponse.json(
       { ok: false, message, error: { code: "CONFLICT", message } },
-      { status: 409 }
+      { status: 409, headers: noStoreHeaders }
     );
   }
   if (code === "CLOUDBASE_NOT_CONFIGURED") {
     const message = "CloudBase 运行环境尚未配置完整。";
     return NextResponse.json(
       { ok: false, message, error: { code: "SERVICE_UNAVAILABLE", message } },
-      { status: 503 }
+      { status: 503, headers: noStoreHeaders }
     );
   }
 
@@ -71,7 +73,7 @@ export function apiErrorResponse(error: unknown, context: string) {
   const message = "服务暂时不可用，请稍后重试。";
   return NextResponse.json(
     { ok: false, message, error: { code: "INTERNAL_ERROR", message } },
-    { status: 500 }
+    { status: 500, headers: noStoreHeaders }
   );
 }
 

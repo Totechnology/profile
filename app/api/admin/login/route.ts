@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       const message = "登录信息不正确。";
       return NextResponse.json(
         { ok: false, message, error: { code: "INVALID_CREDENTIALS", message } },
-        { status: 401 }
+        { status: 401, headers: { "Cache-Control": "no-store" } }
       );
     }
 

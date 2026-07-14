@@ -20,7 +20,11 @@ export const PORTFOLIO_ITEMS_COLLECTION = "portfolio_items";
 export const PORTFOLIO_SETTINGS_COLLECTION = "portfolio_settings";
 export const SITE_SETTINGS_DOCUMENT_ID = "main";
 
-const defaultContentFile = path.join(process.cwd(), ".content", "site-content.json");
+const defaultContentFile = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  ".content",
+  "site-content.json"
+);
 const queryPageSize = 100;
 
 const sectionKeyToDatabaseSection: Record<SectionKey, PortfolioSection> = {
@@ -101,7 +105,7 @@ function bundledSeedContent(): SiteContent {
 }
 
 function getContentFilePath() {
-  return process.env.CONTENT_FILE_PATH || defaultContentFile;
+  return defaultContentFile;
 }
 
 export function isCloudBaseConfigured() {
