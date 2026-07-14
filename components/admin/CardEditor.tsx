@@ -160,7 +160,7 @@ export function CardEditor({
   const imageField = (label = "照片") => (
     <div className="admin-label md:col-span-2">
       <span>{label}</span>
-      <div className="grid gap-3 rounded-[12px] border border-border bg-popover/45 p-3">
+      <div className="grid gap-3 rounded-[var(--radius-sm)] border border-border bg-popover/45 p-3">
         <textarea
           className="admin-input"
           rows={4}
@@ -189,7 +189,7 @@ export function CardEditor({
       {getImages().length ? (
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {getImages().map((image, index) => (
-            <div key={image} className="group relative overflow-hidden rounded-[12px] border border-border bg-muted">
+            <div key={image} className="group relative overflow-hidden rounded-[var(--radius-sm)] border border-border bg-muted">
               <button
                 type="button"
                 className="focus-ring block w-full text-left"
@@ -219,7 +219,7 @@ export function CardEditor({
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <div className="md:col-span-2 flex flex-wrap items-center gap-3 rounded-[12px] border border-border bg-popover/45 p-4">
+      <div className="md:col-span-2 flex flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-border bg-popover/45 p-4">
         <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-secondary-foreground">
           <input
             className="h-4 w-4 accent-[var(--primary)]"

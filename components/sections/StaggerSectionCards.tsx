@@ -1,9 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
+import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Tag } from "@/components/ui/Tag";
 import { cn } from "@/lib/utils";
 
 export type StaggerCardItem = {
@@ -11,11 +14,14 @@ export type StaggerCardItem = {
   title: string;
   body: string;
   meta?: string;
+  kicker?: string;
   image?: string;
   images?: string[];
   tags?: string[];
+  outcomes?: string[];
   href?: string;
   featured?: boolean;
+  kind?: "capability" | "project";
 };
 
 function StaggerCard({
@@ -24,64 +30,36 @@ function StaggerCard({
   cardWidth,
   cardHeight,
   opening,
-  handleMove,
-  handleOpen
+  onMove,
+  onOpen
 }: {
   item: StaggerCardItem;
   position: number;
   cardWidth: number;
   cardHeight: number;
   opening: boolean;
-  handleMove: (steps: number) => void;
-  handleOpen: (item: StaggerCardItem) => void;
+  onMove: (steps: number) => void;
+  onOpen: (item: StaggerCardItem) => void;
 }) {
   const reduceMotion = useReducedMotion();
-  const [hovered, setHovered] = useState(false);
-  const cardRef = useRef<HTMLElement>(null);
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useTransform(mouseY, [-70, 70], [5, -5]);
-  const rotateY = useTransform(mouseX, [-70, 70], [-5, 5]);
-  const springRotateX = useSpring(rotateX, { stiffness: 260, damping: 28 });
-  const springRotateY = useSpring(rotateY, { stiffness: 260, damping: 28 });
-
   const isCenter = position === 0;
-  const showSystemLayer = isCenter || hovered;
-  const bodyParagraphs = item.body
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
   const safePosition = Math.max(-3, Math.min(3, position));
-  const offsetX = (cardWidth / 1.5) * safePosition;
-  const offsetY = isCenter ? -42 : safePosition % 2 ? 22 : -12;
-  const rotation = isCenter ? 0 : safePosition % 2 ? 2.4 : -2.4;
-  const scale = opening ? 1.16 : hovered ? (isCenter ? 1.035 : 1.018) : 1;
-
-  function handleMouseMove(event: MouseEvent<HTMLElement>) {
-    if (!cardRef.current || reduceMotion) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    mouseX.set(event.clientX - (rect.left + rect.width / 2));
-    mouseY.set(event.clientY - (rect.top + rect.height / 2));
-  }
-
-  function handleMouseLeave() {
-    mouseX.set(0);
-    mouseY.set(0);
-    setHovered(false);
-  }
+  const offsetX = cardWidth * 0.72 * safePosition;
+  const offsetY = isCenter ? -28 : Math.abs(safePosition) * 12;
+  const rotation = isCenter ? 0 : safePosition < 0 ? -2.1 : 2.1;
+  const scale = opening ? 1.04 : isCenter ? 1.1 : 0.91;
 
   function activate() {
-    if (position !== 0) {
-      handleMove(position);
+    if (!isCenter) {
+      onMove(position);
       return;
     }
 
-    handleOpen(item);
+    onOpen(item);
   }
 
   return (
     <motion.article
-      ref={cardRef}
       tabIndex={0}
       role="button"
       aria-label={item.href ? `打开 ${item.title}` : item.title}
@@ -92,259 +70,119 @@ function StaggerCard({
           activate();
         }
       }}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={handleMouseLeave}
       className={cn(
-        "absolute left-1/2 top-1/2 cursor-pointer overflow-visible transition-all duration-300 ease-out",
-        "focus-ring focus-within:outline-none",
-        isCenter ? "z-20" : "z-10"
+        "focus-ring absolute left-1/2 top-1/2 cursor-pointer overflow-visible",
+        isCenter ? "z-20" : "z-10",
+        Math.abs(safePosition) > 2 && "pointer-events-none"
       )}
-      style={{
-        width: cardWidth,
-        height: cardHeight,
-        perspective: 1000,
-        transform: `
-          translate(-50%, -50%)
-          translateX(${offsetX}px)
-          translateY(${offsetY}px)
-          rotate(${rotation}deg)
-          scale(${scale})
-        `
-      }}
+      style={{ width: cardWidth, height: cardHeight }}
       animate={{
-        opacity: opening ? 0.96 : Math.abs(safePosition) > 2 ? 0.56 : 1,
-        filter: opening ? "blur(0px)" : Math.abs(safePosition) > 2 ? "blur(1px)" : "blur(0px)"
+        x: `calc(-50% + ${offsetX}px)`,
+        y: `calc(-50% + ${offsetY}px)`,
+        rotate: reduceMotion ? 0 : rotation,
+        scale,
+        opacity: Math.abs(safePosition) > 2 ? 0 : isCenter ? 1 : 0.72,
+        filter: isCenter ? "saturate(1)" : "saturate(0.78)"
       }}
-      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: reduceMotion ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
     >
-      <motion.div
+      <div
         className={cn(
-          "archive-card-shape relative h-full w-full overflow-hidden border-2 p-4 transition-colors duration-300 sm:p-7",
+          "paper-card archive-card-shape h-full overflow-hidden p-5 sm:p-7",
           isCenter
-            ? "is-active border-primary bg-primary text-primary-foreground"
-            : "border-border bg-card text-card-foreground hover:border-primary/60"
+            ? "archive-card-active shadow-[var(--shadow-card)]"
+            : "bg-[var(--surface)] text-card-foreground"
         )}
-        style={{
-          rotateX: reduceMotion ? 0 : springRotateX,
-          rotateY: reduceMotion ? 0 : springRotateY,
-          transformStyle: "preserve-3d",
-          boxShadow: isCenter
-            ? "0px 14px 0px -2px color-mix(in srgb, var(--border), var(--primary) 18%), 0 28px 64px rgb(61 57 41 / 0.18)"
-            : hovered
-              ? "0 20px 44px rgb(61 57 41 / 0.13)"
-              : "0px 10px 28px rgb(61 57 41 / 0.08)"
-        }}
       >
-        <motion.div
-          aria-hidden
+        <div
+          aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute inset-0 z-30 origin-right border-l",
+            "pointer-events-none absolute inset-0 opacity-70",
             isCenter
-              ? "border-primary-foreground/28 bg-[linear-gradient(90deg,rgb(255_255_255_/_0.12),rgb(255_255_255_/_0.68))]"
-              : "border-border bg-[linear-gradient(90deg,rgb(245_244_239_/_0.18),rgb(255_255_255_/_0.88))]"
+              ? "bg-[linear-gradient(rgb(255_255_255_/_0.11)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255_/_0.11)_1px,transparent_1px)] bg-[size:46px_46px]"
+              : "bg-[linear-gradient(rgb(80_72_60_/_0.055)_1px,transparent_1px),linear-gradient(90deg,rgb(80_72_60_/_0.055)_1px,transparent_1px)] bg-[size:46px_46px]"
           )}
-          initial={false}
-          animate={{
-            opacity: opening ? 1 : 0,
-            scaleX: opening ? 1 : 0,
-            rotateY: opening ? 0 : -72
-          }}
-          transition={{ duration: reduceMotion ? 0 : 0.28, ease: [0.4, 0, 0.2, 1] }}
-          style={{ transformOrigin: "right center" }}
         />
 
-        <motion.div
-          className="absolute inset-0 bg-[linear-gradient(135deg,rgb(255_255_255_/_0.22),transparent_44%),radial-gradient(circle_at_78%_22%,rgb(156_135_245_/_0.16),transparent_30%)]"
-          animate={{ opacity: showSystemLayer ? 1 : 0.42 }}
-          transition={{ duration: 0.3 }}
-        />
-
-        <motion.svg
-          className="absolute inset-0 h-full w-full"
-          preserveAspectRatio="none"
-          animate={{ opacity: showSystemLayer ? 0.9 : 0.16 }}
-          transition={{ duration: 0.28 }}
-        >
-          <defs>
-            <pattern id={`archive-grid-${item.id}`} width="24" height="24" patternUnits="userSpaceOnUse">
-              <path d="M 24 0 L 0 0 0 24" fill="none" className={isCenter ? "stroke-primary-foreground/14" : "stroke-foreground/10"} strokeWidth="0.8" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill={`url(#archive-grid-${item.id})`} />
-          {[34, 58, 76].map((y, index) => (
-            <motion.line
-              key={`h-${y}`}
-              x1="9%"
-              y1={`${y}%`}
-              x2="91%"
-              y2={`${y}%`}
-              className={isCenter ? "stroke-primary-foreground/30" : "stroke-primary/36"}
-              strokeWidth={index === 1 ? 2.4 : 1.4}
-              strokeLinecap="round"
-              initial={false}
-              animate={{ pathLength: showSystemLayer ? 1 : 0.22 }}
-              transition={{ duration: 0.62, delay: index * 0.05 }}
-            />
-          ))}
-          {[24, 48, 72].map((x, index) => (
-            <motion.line
-              key={`v-${x}`}
-              x1={`${x}%`}
-              y1="16%"
-              x2={`${x}%`}
-              y2="84%"
-              className={isCenter ? "stroke-primary-foreground/22" : "stroke-foreground/18"}
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              initial={false}
-              animate={{ pathLength: showSystemLayer ? 1 : 0.18 }}
-              transition={{ duration: 0.54, delay: 0.12 + index * 0.05 }}
-            />
-          ))}
-          {[
-            ["18%", "28%"],
-            ["46%", "44%"],
-            ["72%", "32%"],
-            ["82%", "72%"]
-          ].map(([cx, cy], index) => (
-            <motion.circle
-              key={`${cx}-${cy}`}
-              cx={cx}
-              cy={cy}
-              r={index === 1 ? 5 : 3.5}
-              className={isCenter ? "fill-primary-foreground/45" : "fill-primary/42"}
-              initial={false}
-              animate={{ scale: showSystemLayer ? [0.75, 1.15, 1] : 0.7, opacity: showSystemLayer ? 1 : 0.3 }}
-              transition={{ duration: 0.42, delay: 0.18 + index * 0.04 }}
-            />
-          ))}
-        </motion.svg>
-
-        <div className="relative z-10 flex h-full min-h-0 flex-col" style={{ transform: "translateZ(34px)" }}>
-          <div className="mb-3 flex shrink-0 items-start justify-between gap-3 sm:mb-4 sm:gap-4">
+        <div className="relative z-10 flex h-full min-h-0 flex-col">
+          <div className="flex items-start justify-between gap-4">
             {item.image ? (
-              <motion.img
+              <Image
                 src={item.image}
-                alt={item.title}
+                alt=""
+                width={64}
+                height={64}
                 className={cn(
-                  "h-12 w-12 rounded-[12px] border object-cover object-center sm:h-16 sm:w-16 sm:rounded-[14px]",
-                  isCenter ? "border-primary-foreground/35 bg-primary-foreground/10" : "border-border bg-muted"
+                  "h-14 w-14 rounded-[var(--radius-sm)] border object-cover sm:h-16 sm:w-16",
+                  isCenter ? "border-primary-foreground/28" : "border-border"
                 )}
-                animate={{ scale: showSystemLayer ? 1.05 : 1 }}
-                transition={{ type: "spring", stiffness: 280, damping: 24 }}
-                style={{ boxShadow: isCenter ? "3px 3px 0px rgb(255 255 255 / 0.22)" : "3px 3px 0px var(--background)" }}
               />
             ) : (
               <div
                 className={cn(
-                  "h-12 w-12 rounded-[12px] border sm:h-16 sm:w-16 sm:rounded-[14px]",
-                  isCenter ? "border-primary-foreground/35 bg-primary-foreground/12" : "border-border bg-muted"
+                  "h-14 w-14 rounded-[var(--radius-sm)] border bg-muted sm:h-16 sm:w-16",
+                  isCenter && "border-primary-foreground/28 bg-primary-foreground/12"
                 )}
-                style={{ boxShadow: isCenter ? "3px 3px 0px rgb(255 255 255 / 0.22)" : "3px 3px 0px var(--background)" }}
+                aria-hidden="true"
               />
             )}
 
-            <motion.div
-              className={cn(
-                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 backdrop-blur-sm",
-                isCenter
-                  ? "border-primary-foreground/22 bg-primary-foreground/12 text-primary-foreground/78"
-                  : "border-border bg-background/48 text-muted-foreground"
-              )}
-              animate={{ scale: hovered ? 1.05 : 1 }}
-              transition={{ duration: 0.2 }}
-            >
-              <span className={cn("h-1.5 w-1.5 rounded-full", isCenter ? "bg-primary-foreground/80" : "bg-primary")} />
-              <span className="mono text-[10px] uppercase tracking-normal">{item.featured ? "Featured" : "Live"}</span>
-            </motion.div>
+            <StatusBadge tone={isCenter ? "neutral" : item.featured ? "accent" : "sage"} className={isCenter ? "border-primary-foreground/24 bg-primary-foreground/10 text-primary-foreground" : ""}>
+              {item.featured ? "Featured" : item.kind === "project" ? "Project" : "Active"}
+            </StatusBadge>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col">
-            {item.meta ? (
-              <p className={cn("mono mb-2 line-clamp-1 text-[10px] sm:mb-3 sm:text-[11px]", isCenter ? "text-primary-foreground/72" : "text-muted-foreground")}>
+          <div className="mt-5 min-h-0 flex-1">
+            <p className={cn("eyebrow", isCenter && "text-primary-foreground/72")}>{item.kicker || item.meta}</p>
+            <h2 className={cn("mt-2 text-2xl font-semibold leading-tight sm:text-[2rem]", isCenter ? "text-primary-foreground" : "text-foreground")}>
+              {item.title}
+            </h2>
+            {item.meta && item.meta !== item.kicker ? (
+              <p className={cn("mono mt-3 text-[11px] leading-5", isCenter ? "text-primary-foreground/68" : "text-muted-foreground")}>
                 {item.meta}
               </p>
             ) : null}
-            <motion.h3
-              className={cn("line-clamp-2 shrink-0 text-lg font-semibold leading-tight sm:text-2xl", isCenter ? "text-primary-foreground" : "text-foreground")}
-              animate={{ x: hovered ? 4 : 0 }}
-              transition={{ type: "spring", stiffness: 360, damping: 28 }}
-            >
-              {item.title}
-            </motion.h3>
-            <p
-              className={cn(
-                "mt-3 line-clamp-4 text-xs leading-5 sm:hidden",
-                isCenter ? "text-primary-foreground/84" : "text-muted-foreground"
-              )}
-            >
+            <p className={cn("mt-4 line-clamp-4 text-sm leading-7", isCenter ? "text-primary-foreground/88" : "text-muted-foreground")}>
               {item.body.replace(/\s+/g, " ")}
             </p>
-            <div
-              className={cn(
-                "custom-scrollbar archive-card-copy mt-4 hidden min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 text-sm leading-6 sm:block",
-                isCenter ? "text-primary-foreground/84" : "text-muted-foreground"
-              )}
-              tabIndex={0}
-              aria-label={`${item.title}完整介绍`}
-            >
-              <div className="space-y-3">
-                {bodyParagraphs.map((paragraph, index) => (
-                  <p key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
-                ))}
+
+            {isCenter && item.outcomes?.length ? (
+              <div className="mt-5 border-t border-primary-foreground/22 pt-4">
+                <p className="mono text-[10px] tracking-[0.1em] text-primary-foreground/62">结果与输出</p>
+                <ul className="mt-2 grid gap-1.5 text-xs leading-5 text-primary-foreground/84">
+                  {item.outcomes.slice(0, 2).map((outcome) => (
+                    <li key={outcome} className="flex gap-2">
+                      <span aria-hidden="true">·</span>
+                      <span>{outcome}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
+            ) : null}
           </div>
 
-          <div className="mt-3 shrink-0 sm:mt-4">
-            <motion.div
-              className={cn(
-                "mb-3 h-px origin-left bg-gradient-to-r sm:mb-4",
-                isCenter
-                  ? "from-primary-foreground/56 via-primary-foreground/28 to-transparent"
-                  : "from-primary/56 via-primary/22 to-transparent"
-              )}
-              animate={{ scaleX: showSystemLayer ? 1 : 0.28 }}
-              transition={{ duration: 0.34, ease: "easeOut" }}
-            />
-
-            <div className="flex items-end justify-between gap-4">
-              <div className="flex flex-wrap gap-2">
-                {item.tags?.slice(0, 3).map((tag, index) => (
-                  <span
-                    key={tag}
-                    className={cn(
-                      "inline-flex min-h-6 items-center rounded-full border px-2 text-[10px] sm:min-h-7 sm:px-2.5 sm:text-[11px]",
-                      index === 2 && "hidden sm:inline-flex",
-                      isCenter
-                        ? "border-primary-foreground/28 bg-primary-foreground/12 text-primary-foreground/86"
-                        : "border-border bg-background/48 text-secondary-foreground"
-                    )}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              {item.href ? (
-                <motion.span
-                  className={cn(
-                    "liquid-glass-control flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition sm:h-9 sm:w-9",
-                    isCenter
-                      ? "border-primary-foreground/30 bg-primary-foreground/12 text-primary-foreground"
-                      : "border-border bg-background/52 text-foreground"
-                  )}
-                  animate={{ rotate: showSystemLayer ? 45 : 0, scale: hovered ? 1.08 : 1 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                >
-                  <ArrowUpRight className="h-4 w-4" strokeWidth={1.8} />
-                </motion.span>
-              ) : null}
+          <div className="mt-5 flex items-end justify-between gap-4 border-t border-current/16 pt-4">
+            <div className="flex min-w-0 flex-wrap gap-1.5">
+              {item.tags?.slice(0, 3).map((tag) => (
+                <Tag key={tag} className={isCenter ? "border-primary-foreground/24 bg-primary-foreground/10 text-primary-foreground" : ""}>
+                  {tag}
+                </Tag>
+              ))}
             </div>
-
+            {item.href ? (
+              <span
+                className={cn(
+                  "grid h-9 w-9 shrink-0 place-items-center rounded-full border",
+                  isCenter ? "border-primary-foreground/28 bg-primary-foreground/10" : "border-border bg-background-soft/72"
+                )}
+                aria-hidden="true"
+              >
+                <ArrowUpRight className="h-4 w-4" strokeWidth={1.8} />
+              </span>
+            ) : null}
           </div>
         </div>
-      </motion.div>
+      </div>
     </motion.article>
   );
 }
@@ -358,8 +196,8 @@ function getCircularPosition(index: number, length: number) {
 export function StaggerSectionCards({ items }: { items: StaggerCardItem[] }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
-  const [cardDimensions, setCardDimensions] = useState({ width: 282, height: 390 });
-  const [itemList, setItemList] = useState<StaggerCardItem[]>(items);
+  const [cardDimensions, setCardDimensions] = useState({ width: 282, height: 408 });
+  const [itemList, setItemList] = useState(items);
   const [openingId, setOpeningId] = useState("");
 
   useEffect(() => {
@@ -367,23 +205,17 @@ export function StaggerSectionCards({ items }: { items: StaggerCardItem[] }) {
   }, [items]);
 
   useEffect(() => {
-    const updateSize = () => {
+    function updateSize() {
       const width = window.innerWidth;
+
       if (width >= 1280) {
-        setCardDimensions({ width: 390, height: 530 });
-        return;
+        setCardDimensions({ width: 356, height: 470 });
+      } else if (width >= 768) {
+        setCardDimensions({ width: 332, height: 450 });
+      } else {
+        setCardDimensions({ width: Math.max(248, Math.min(282, width - 72)), height: 408 });
       }
-
-      if (width >= 768) {
-        setCardDimensions({ width: 370, height: 510 });
-        return;
-      }
-
-      setCardDimensions({
-        width: Math.max(248, Math.min(282, width - 48)),
-        height: 390
-      });
-    };
+    }
 
     updateSize();
     window.addEventListener("resize", updateSize);
@@ -392,20 +224,20 @@ export function StaggerSectionCards({ items }: { items: StaggerCardItem[] }) {
 
   const visibleItems = useMemo(() => itemList.slice(0, 12), [itemList]);
 
-  const handleMove = (steps: number) => {
+  function handleMove(steps: number) {
     if (!steps || openingId) return;
 
     setItemList((current) => {
       const next = [...current];
 
       if (steps > 0) {
-        for (let i = steps; i > 0; i -= 1) {
+        for (let index = steps; index > 0; index -= 1) {
           const item = next.shift();
           if (!item) return current;
           next.push(item);
         }
       } else {
-        for (let i = steps; i < 0; i += 1) {
+        for (let index = steps; index < 0; index += 1) {
           const item = next.pop();
           if (!item) return current;
           next.unshift(item);
@@ -414,21 +246,19 @@ export function StaggerSectionCards({ items }: { items: StaggerCardItem[] }) {
 
       return next;
     });
-  };
-
-  const handleOpen = (item: StaggerCardItem) => {
-    if (!item.href || openingId) return;
-    setOpeningId(item.id);
-    window.setTimeout(() => router.push(item.href || ""), reduceMotion ? 0 : 280);
-  };
-
-  if (!visibleItems.length) {
-    return null;
   }
 
+  function handleOpen(item: StaggerCardItem) {
+    if (!item.href || openingId) return;
+    setOpeningId(item.id);
+    window.setTimeout(() => router.push(item.href || ""), reduceMotion ? 0 : 220);
+  }
+
+  if (!visibleItems.length) return null;
+
   return (
-    <div className="relative min-h-[510px] w-full overflow-hidden border-y border-border bg-muted/30 md:min-h-[700px]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,rgb(201_100_66_/_0.13),transparent_34%),radial-gradient(circle_at_70%_35%,rgb(156_135_245_/_0.12),transparent_28%)]" />
+    <section className="relative min-h-[540px] w-full overflow-hidden border-y border-border bg-background-soft/52 md:min-h-[650px]" aria-label="内容卡片轮播">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,transparent,rgb(208_106_72_/_0.05),transparent)]" aria-hidden="true" />
       {visibleItems.map((item, index) => (
         <StaggerCard
           key={item.id}
@@ -437,31 +267,19 @@ export function StaggerSectionCards({ items }: { items: StaggerCardItem[] }) {
           cardWidth={cardDimensions.width}
           cardHeight={cardDimensions.height}
           opening={openingId === item.id}
-          handleMove={handleMove}
-          handleOpen={handleOpen}
+          onMove={handleMove}
+          onOpen={handleOpen}
         />
       ))}
 
       <div className="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 gap-3">
-        <button
-          onClick={() => handleMove(-1)}
-          className="carousel-nav-button focus-ring"
-          type="button"
-          aria-label="Previous card"
-          disabled={Boolean(openingId)}
-        >
-          <ChevronLeft className="h-6 w-6" strokeWidth={1.8} />
+        <button className="carousel-nav-button focus-ring" type="button" onClick={() => handleMove(-1)} aria-label="上一张卡片" disabled={Boolean(openingId)}>
+          <ChevronLeft className="h-5 w-5" strokeWidth={1.8} />
         </button>
-        <button
-          onClick={() => handleMove(1)}
-          className="carousel-nav-button focus-ring"
-          type="button"
-          aria-label="Next card"
-          disabled={Boolean(openingId)}
-        >
-          <ChevronRight className="h-6 w-6" strokeWidth={1.8} />
+        <button className="carousel-nav-button focus-ring" type="button" onClick={() => handleMove(1)} aria-label="下一张卡片" disabled={Boolean(openingId)}>
+          <ChevronRight className="h-5 w-5" strokeWidth={1.8} />
         </button>
       </div>
-    </div>
+    </section>
   );
 }

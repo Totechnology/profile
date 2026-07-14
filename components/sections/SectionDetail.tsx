@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { PageIntro } from "@/components/layout/PageIntro";
 import { Reveal } from "@/components/motion/Reveal";
 import { BlogTimeline, type BlogTimelineItem } from "@/components/sections/BlogTimeline";
+import { LifeGallery, type LifeGalleryItem } from "@/components/sections/LifeGallery";
 import { StaggerSectionCards, type StaggerCardItem } from "@/components/sections/StaggerSectionCards";
 import type { SectionKey, SiteContent } from "@/lib/types";
 import { getEntrySlug } from "@/lib/slugs";
@@ -18,12 +18,14 @@ function getStaggerItems(content: SiteContent, section: SectionKey): StaggerCard
       id: item.id,
       title: item.title,
       body: item.description,
-      meta: item.level,
+      meta: item.createdAt,
+      kicker: item.level,
       image: item.image ?? showcaseImage,
       images: getImages(item.image, item.images, showcaseImage),
       tags: item.skills,
       href: `/capabilities/${getEntrySlug(item)}`,
-      featured: item.featured
+      featured: item.featured,
+      kind: "capability"
     }));
   }
 
@@ -33,11 +35,14 @@ function getStaggerItems(content: SiteContent, section: SectionKey): StaggerCard
       title: item.title,
       body: item.description,
       meta: [item.role, item.time].filter(Boolean).join(" / "),
+      kicker: item.type,
       image: item.image ?? showcaseImage,
       images: getImages(item.image, item.images, showcaseImage),
       tags: item.tags,
+      outcomes: item.highlights,
       href: `/experience/${getEntrySlug(item)}`,
-      featured: item.featured
+      featured: item.featured,
+      kind: "project"
     }));
   }
 
@@ -76,7 +81,7 @@ function getTimelineItems(content: SiteContent, section: "thoughts" | "life"): B
         title: item.title,
         date: item.date,
         body: item.summary,
-        image: item.image ?? showcaseImage,
+        image: item.image,
         images: getImages(item.image, item.images, showcaseImage),
         tags: item.tags,
         href: item.link,
@@ -101,33 +106,39 @@ function getTimelineItems(content: SiteContent, section: "thoughts" | "life"): B
     }));
 }
 
+function getLifeItems(content: SiteContent): LifeGalleryItem[] {
+  const fallback = content.showcases.life.image;
+
+  return [...content.life]
+    .sort((a, b) => dateValue(b.date || b.createdAt) - dateValue(a.date || a.createdAt))
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      date: item.date,
+      location: item.location,
+      image: item.image ?? fallback,
+      tags: item.tags,
+      href: `/life/${getEntrySlug(item)}`,
+      featured: item.featured
+    }));
+}
+
 export function SectionDetail({ content, section }: { content: SiteContent; section: SectionKey }) {
   const showcase = content.showcases[section];
   const staggerItems = getStaggerItems(content, section);
 
   return (
-    <main className="min-h-[100dvh] pt-20 pb-12 md:pt-28 md:pb-16">
-      <div className="container-space">
-        <Reveal>
-          <div className="mb-5 max-w-3xl md:mb-8">
-            <Link className="secondary-button focus-ring mb-5 w-fit md:mb-8" href="/">
-              <ArrowLeft className="h-4 w-4" strokeWidth={1.8} />
-              返回入口
-            </Link>
-            <p className="mono text-xs text-primary">{showcase.eyebrow}</p>
-            <h1 className="mt-3 text-3xl font-semibold leading-tight text-foreground md:text-6xl">
-              {showcase.title}
-            </h1>
-            <p className="mt-3 line-clamp-2 max-w-2xl text-sm leading-6 text-muted-foreground md:mt-5 md:line-clamp-none md:text-lg md:leading-7">
-              {showcase.description}
-            </p>
-          </div>
-        </Reveal>
-      </div>
-
+    <main className="min-h-[100dvh] pb-12 pt-24 md:pb-20 md:pt-28">
       <Reveal>
-        {section === "thoughts" || section === "life" ? (
+        <PageIntro eyebrow={showcase.eyebrow} title={showcase.title} description={showcase.description} backLink="/" />
+      </Reveal>
+
+      <Reveal className="mt-7 md:mt-10">
+        {section === "thoughts" ? (
           <BlogTimeline items={getTimelineItems(content, section)} />
+        ) : section === "life" ? (
+          <LifeGallery items={getLifeItems(content)} />
         ) : (
           <StaggerSectionCards items={staggerItems} />
         )}

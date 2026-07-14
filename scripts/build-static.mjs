@@ -41,8 +41,7 @@ async function prepareWorkspace() {
 
   await Promise.all([
     fs.rm(path.join(workspaceDir, "app", "admin"), { recursive: true, force: true }),
-    fs.rm(path.join(workspaceDir, "app", "api"), { recursive: true, force: true }),
-    fs.rm(path.join(workspaceDir, "app", "profile-layout-options"), { recursive: true, force: true })
+    fs.rm(path.join(workspaceDir, "app", "api"), { recursive: true, force: true })
   ]);
 
   await Promise.all(

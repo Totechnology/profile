@@ -103,7 +103,7 @@ export function ProfileEditor({
   const portraitField = (
     <div className="admin-label">
       <span>个人头像路径</span>
-      <div className="grid gap-3 rounded-[12px] border border-border bg-popover/45 p-3">
+      <div className="grid gap-3 rounded-[var(--radius-sm)] border border-border bg-popover/45 p-3">
         <input
           className="admin-input"
           value={content.profile.portraitImage}
@@ -115,10 +115,10 @@ export function ProfileEditor({
             <img
               src={content.profile.portraitImage}
               alt="当前头像预览"
-              className="aspect-square h-28 rounded-[18px] border border-border object-cover"
+              className="aspect-square h-28 rounded-[var(--radius-md)] border border-border object-cover"
             />
           ) : (
-            <div className="flex aspect-square h-28 items-center justify-center rounded-[18px] border border-dashed border-border text-xs text-muted-foreground">
+            <div className="flex aspect-square h-28 items-center justify-center rounded-[var(--radius-md)] border border-dashed border-border text-xs text-muted-foreground">
               无头像
             </div>
           )}
@@ -206,7 +206,7 @@ export function ProfileEditor({
           {showcaseOrder.map((key) => {
             const item = content.showcases[key];
             return (
-              <div key={key} className="rounded-[18px] border border-border bg-popover/45 p-4">
+              <div key={key} className="rounded-[var(--radius-md)] border border-border bg-popover/45 p-4">
                 <p className="mono mb-3 text-xs text-primary">{key}</p>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="admin-label">

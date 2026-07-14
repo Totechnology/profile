@@ -149,12 +149,12 @@ export function SectionManager({
               key={item.id}
               type="button"
               className={cn(
-                "focus-ring group flex items-center gap-3 rounded-[12px] border border-border bg-popover/50 p-3 text-left transition hover:border-primary/40 hover:bg-popover",
+                "focus-ring group flex items-center gap-3 rounded-[var(--radius-sm)] border border-border bg-popover/50 p-3 text-left transition hover:border-primary/40 hover:bg-popover",
                 selectedItem?.id === item.id && "border-primary/45 bg-accent"
               )}
               onClick={() => setSelectedId(item.id)}
             >
-              <span className="mono flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-muted text-xs text-muted-foreground">
+              <span className="mono flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-muted text-xs text-muted-foreground">
                 {index + 1}
               </span>
               <span className="min-w-0 flex-1">
@@ -207,7 +207,7 @@ export function SectionManager({
             <CardEditor section={section} item={selectedItem} onChange={updateItem} />
           </>
         ) : (
-          <div className="flex min-h-[420px] items-center justify-center rounded-[12px] border border-dashed border-border text-sm text-muted-foreground">
+          <div className="flex min-h-[420px] items-center justify-center rounded-[var(--radius-sm)] border border-dashed border-border text-sm text-muted-foreground">
             当前分类还没有卡片，请新增一张。
           </div>
         )}

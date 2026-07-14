@@ -4,8 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { motion, MotionConfig, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { scrapbookImages } from "@/components/scrapbook/assets";
 import { cn } from "@/lib/utils";
 
@@ -19,88 +18,6 @@ const navItems = [
 export function Header() {
   const pathname = usePathname();
   const reducedMotion = useReducedMotion();
-  const [compact, setCompact] = useState(false);
-  const collapseTimerRef = useRef<number | null>(null);
-  const islandRef = useRef<HTMLDivElement | null>(null);
-  const pointerInsideRef = useRef(false);
-
-  const contentTransition = reducedMotion
-    ? { duration: 0 }
-    : { type: "spring" as const, stiffness: 560, damping: 36, mass: 0.58 };
-
-  const expandIsland = useCallback(() => {
-    setCompact(false);
-  }, []);
-
-  const collapseIsland = useCallback(() => {
-    setCompact(true);
-  }, []);
-
-  const clearCollapseTimer = useCallback(() => {
-    if (collapseTimerRef.current === null) return;
-    window.clearTimeout(collapseTimerRef.current);
-    collapseTimerRef.current = null;
-  }, []);
-
-  const scheduleCollapse = useCallback((delay: number) => {
-    clearCollapseTimer();
-    collapseTimerRef.current = window.setTimeout(() => {
-      collapseTimerRef.current = null;
-      collapseIsland();
-    }, delay);
-  }, [clearCollapseTimer, collapseIsland]);
-
-  const handleIslandEnter = useCallback(() => {
-    clearCollapseTimer();
-    expandIsland();
-  }, [clearCollapseTimer, expandIsland]);
-
-  const handleIslandLeave = useCallback(() => {
-    scheduleCollapse(2000);
-  }, [scheduleCollapse]);
-
-  useEffect(() => {
-    pointerInsideRef.current = false;
-    setCompact(false);
-
-    if (window.matchMedia("(min-width: 768px)").matches) {
-      scheduleCollapse(5000);
-    }
-
-    return clearCollapseTimer;
-  }, [pathname, clearCollapseTimer, scheduleCollapse]);
-
-  useEffect(() => {
-    const handleMouseMove = (event: globalThis.MouseEvent) => {
-      if (!window.matchMedia("(min-width: 768px)").matches) {
-        pointerInsideRef.current = false;
-        return;
-      }
-
-      const island = islandRef.current;
-      if (!island) return;
-
-      const rect = island.getBoundingClientRect();
-      const isCompact = island.dataset.islandState === "compact";
-      const left = isCompact ? rect.left + rect.width / 2 - 60 : rect.left;
-      const right = isCompact ? rect.left + rect.width / 2 + 60 : rect.right;
-      const top = rect.top;
-      const bottom = isCompact ? Math.min(rect.bottom, rect.top + 96) : rect.bottom;
-      const inside = event.clientX >= left && event.clientX <= right && event.clientY >= top && event.clientY <= bottom;
-
-      if (inside === pointerInsideRef.current) return;
-      pointerInsideRef.current = inside;
-
-      if (inside) {
-        handleIslandEnter();
-      } else {
-        handleIslandLeave();
-      }
-    };
-
-    window.addEventListener("mousemove", handleMouseMove, { passive: true });
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [handleIslandEnter, handleIslandLeave]);
 
   const renderNav = (variant: "desktop" | "mobile") => (
     <>
@@ -113,7 +30,7 @@ export function Header() {
             href={item.href}
             className={cn(
               "relative flex min-h-11 items-center text-sm font-medium text-secondary-foreground transition-colors hover:text-primary",
-              variant === "desktop" ? "justify-center px-2 md:h-full" : "justify-between rounded-[14px] px-4",
+              variant === "desktop" ? "justify-center rounded-[var(--radius-sm)] px-1 text-xs md:h-full" : "justify-between rounded-[var(--radius-sm)] px-4",
               active && "text-primary"
             )}
           >
@@ -126,7 +43,7 @@ export function Header() {
                 layoutId={`${variant}-active-navigation-marker`}
                 className={cn(
                   "absolute bg-primary",
-                  variant === "desktop" ? "inset-x-2 bottom-0 h-0.5 rounded-full" : "inset-y-2 left-0 w-0.5 rounded-full"
+                  variant === "desktop" ? "inset-x-5 bottom-1 h-0.5 rounded-full" : "inset-y-2 left-0 w-0.5 rounded-full"
                 )}
                 transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 460, damping: 36 }}
               />
@@ -138,11 +55,10 @@ export function Header() {
   );
 
   return (
-    <MotionConfig transition={contentTransition}>
-      <header className="pointer-events-auto fixed left-0 right-0 top-3 z-40 px-3 md:pointer-events-none md:top-4 md:px-4">
+    <header className="pointer-events-auto fixed left-0 right-0 top-3 z-40 px-3 md:pointer-events-none md:top-4 md:px-4">
         <details className="mobile-menu-trigger group ml-auto w-fit md:hidden">
           <summary
-            className="focus-ring pointer-events-auto ml-auto inline-flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-[14px] border border-border bg-popover/92 text-foreground shadow-[0_10px_28px_rgb(61_57_41_/_0.12)] backdrop-blur-xl transition-transform active:scale-95 motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
+            className="focus-ring pointer-events-auto ml-auto inline-flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-[var(--radius-sm)] border border-border bg-popover/92 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-95 motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
             aria-label="打开导航菜单"
             aria-controls="mobile-navigation"
           >
@@ -159,100 +75,46 @@ export function Header() {
         </details>
 
         <div
-          ref={islandRef}
-          className={cn(
-            "relative mx-auto hidden h-[112px] w-[min(calc(100vw-32px),640px)] md:block",
-            compact ? "pointer-events-none" : "pointer-events-auto"
-          )}
-          data-island-state={compact ? "compact" : "expanded"}
+          className="pointer-events-none relative mx-auto hidden h-[122px] w-full justify-center md:flex"
           data-testid="coffee-island"
         >
-          <motion.div
-            aria-hidden
-            animate={{
-              opacity: compact ? 0 : 1,
-              scale: compact ? 0.96 : 1,
-              filter: compact ? "blur(1.4px)" : "blur(0px)"
-            }}
-            transition={{
-              ...contentTransition,
-              opacity: { duration: reducedMotion ? 0 : compact ? 0.28 : 0.18, ease: "easeOut" },
-              filter: { duration: reducedMotion ? 0 : 0.18, ease: "easeOut" }
-            }}
-            className="pointer-events-none absolute inset-0 drop-shadow-[0_22px_34px_rgb(61_57_41_/_0.14)]"
-          >
-            <Image
-              src={scrapbookImages.coffeeIslandTray}
-              alt=""
-              width={760}
-              height={215}
-              priority
-              sizes="(min-width: 900px) 640px, calc(100vw - 32px)"
-              className="absolute left-0 h-auto w-full max-w-none select-none"
-              style={{ top: "clamp(-32px, -3.9vw, -14px)" }}
-            />
-          </motion.div>
+          <div className="group pointer-events-auto relative h-11 w-11 shrink-0 overflow-visible">
+            <button
+              type="button"
+              aria-label="主导航，悬停或聚焦后展开"
+              aria-controls="desktop-navigation"
+              className="focus-ring absolute left-1/2 top-0 z-30 grid h-11 w-11 -translate-x-1/2 place-items-center rounded-full transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 group-focus-within:pointer-events-none group-focus-within:opacity-0 motion-reduce:transition-none"
+            >
+              <span className="grid h-[30px] w-[30px] place-items-center rounded-full border border-border/70 bg-popover/90 shadow-[0_7px_18px_rgb(61_57_41_/_0.18),inset_0_1px_0_rgb(255_255_255_/_0.65)] backdrop-blur-md">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary/75" aria-hidden="true" />
+              </span>
+            </button>
 
-          <motion.button
-            className="focus-ring pointer-events-auto absolute left-1/2 top-0 z-30 h-[86px] w-[104px] -translate-x-1/2 rounded-[34px]"
-            type="button"
-            aria-label="展开导航"
-            aria-hidden={!compact}
-            tabIndex={compact ? 0 : -1}
-            animate={{ opacity: compact ? 1 : 0 }}
-            transition={{ duration: reducedMotion ? 0 : 0.12 }}
-            onClick={expandIsland}
-            style={{ pointerEvents: compact ? "auto" : "none" }}
-          >
-            <span className="sr-only">展开导航</span>
-          </motion.button>
+            <div
+              data-testid="coffee-island-panel"
+              className="pointer-events-none invisible absolute left-1/2 top-0 h-[122px] w-[440px] -translate-x-1/2 scale-95 opacity-0 drop-shadow-[0_18px_28px_rgb(61_57_41_/_0.16)] transition-[opacity,transform] duration-200 ease-out group-hover:visible group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:scale-100 group-focus-within:opacity-100 motion-reduce:transition-none"
+            >
+              <Image
+                src={scrapbookImages.coffeeIslandTray}
+                alt=""
+                width={1969}
+                height={546}
+                priority
+                sizes="440px"
+                className="pointer-events-none absolute inset-0 h-auto w-full max-w-none select-none"
+              />
 
-          <motion.div
-            aria-hidden
-            animate={{
-              opacity: compact ? 1 : 0,
-              scale: compact ? [0.94, 1.025, 1] : 0.9,
-              rotate: compact ? [0, -0.8, 0] : 0,
-              y: compact ? [6, -1, 0] : -4
-            }}
-            transition={
-              reducedMotion
-                ? { duration: 0 }
-                : compact
-                  ? {
-                      opacity: { duration: 0.1, ease: "easeOut" },
-                      scale: { duration: 0.32, times: [0, 0.64, 1], ease: [0.22, 0.86, 0.24, 1] },
-                      rotate: { duration: 0.32, times: [0, 0.64, 1], ease: [0.22, 0.86, 0.24, 1] },
-                      y: { duration: 0.32, times: [0, 0.64, 1], ease: [0.22, 0.86, 0.24, 1] }
-                    }
-                  : { opacity: { duration: 0.1, ease: "easeOut" }, scale: { duration: 0.16, ease: "easeOut" } }
-            }
-            className="pointer-events-none absolute left-1/2 top-0 z-20 grid h-[86px] w-[104px] -translate-x-1/2 place-items-center drop-shadow-[0_16px_22px_rgb(61_57_41_/_0.16)]"
-          >
-            <Image
-              src={scrapbookImages.coffeeIslandMug}
-              alt=""
-              width={100}
-              height={114}
-              sizes="88px"
-              className="h-[78px] w-auto select-none object-contain"
-            />
-          </motion.div>
-
-          <motion.nav
-            animate={{
-              opacity: compact ? 0 : 1
-            }}
-            transition={{ duration: reducedMotion ? 0 : compact ? 0.1 : 0.18, ease: "easeOut" }}
-            className="absolute left-[177px] right-9 top-[62px] z-20 hidden h-9 grid-cols-4 gap-5 md:grid"
-            aria-label="主导航"
-            style={{ pointerEvents: compact ? "none" : "auto" }}
-          >
-            {renderNav("desktop")}
-          </motion.nav>
+              <nav
+                id="desktop-navigation"
+                className="pointer-events-auto absolute left-[120px] top-12 z-20 grid h-[51px] grid-cols-[repeat(4,58px)] gap-[18px]"
+                aria-label="主导航"
+              >
+                {renderNav("desktop")}
+              </nav>
+            </div>
+          </div>
         </div>
 
-      </header>
-    </MotionConfig>
+    </header>
   );
 }

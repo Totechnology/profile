@@ -43,7 +43,7 @@ export function AdminDashboard({ initialContent }: { initialContent: SiteContent
   }
 
   return (
-    <main className="space-shell min-h-[100dvh] px-4 py-6 md:px-6">
+    <main className="admin-shell space-shell min-h-[100dvh] px-4 py-6 md:px-6">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <header className="glass-panel flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -66,12 +66,12 @@ export function AdminDashboard({ initialContent }: { initialContent: SiteContent
         </header>
 
         {status === "saved" ? (
-          <p className="rounded-[12px] border border-primary/25 bg-accent px-4 py-3 text-sm text-accent-foreground">
+          <p className="rounded-[var(--radius-sm)] border border-primary/25 bg-accent px-4 py-3 text-sm text-accent-foreground">
             已保存。
           </p>
         ) : null}
         {status === "error" ? (
-          <p className="rounded-[12px] border border-destructive/25 bg-popover px-4 py-3 text-sm text-destructive">
+          <p className="rounded-[var(--radius-sm)] border border-destructive/25 bg-popover px-4 py-3 text-sm text-destructive">
             保存失败，请检查登录状态或服务器日志。
           </p>
         ) : null}
@@ -82,7 +82,7 @@ export function AdminDashboard({ initialContent }: { initialContent: SiteContent
               <button
                 type="button"
                 className={cn(
-                  "focus-ring flex items-center justify-between rounded-[12px] px-4 py-3 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground",
+                  "focus-ring flex items-center justify-between rounded-[var(--radius-sm)] px-4 py-3 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground",
                   activeSection === "profile" && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                 )}
                 onClick={() => setActiveSection("profile")}
@@ -95,7 +95,7 @@ export function AdminDashboard({ initialContent }: { initialContent: SiteContent
                   key={section}
                   type="button"
                   className={cn(
-            "focus-ring flex items-center justify-between rounded-[12px] px-4 py-3 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground",
+            "focus-ring flex items-center justify-between rounded-[var(--radius-sm)] px-4 py-3 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground",
                     activeSection === section && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                   )}
                   onClick={() => setActiveSection(section)}

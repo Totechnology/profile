@@ -29,10 +29,10 @@ export function AdminLogin() {
   }
 
   return (
-    <main className="space-shell flex min-h-[100dvh] items-center justify-center px-4">
+    <main className="admin-shell space-shell flex min-h-[100dvh] items-center justify-center px-4">
       <form className="glass-panel w-full max-w-md p-6" onSubmit={handleSubmit}>
         <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[12px] border border-border bg-accent text-primary">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-accent text-primary">
             <LockKeyhole className="h-5 w-5" strokeWidth={1.8} />
           </div>
           <div>
@@ -53,7 +53,7 @@ export function AdminLogin() {
           />
         </label>
 
-        {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
+        {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
 
         <button className="primary-button focus-ring mt-6 w-full" type="submit" disabled={loading}>
           {loading ? "正在验证" : "进入管理模式"}

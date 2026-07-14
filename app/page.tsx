@@ -1,5 +1,4 @@
 import { SectionGateway } from "@/components/home/SectionGateway";
-import { KineticBackground } from "@/components/background/KineticBackground";
 import { IntroGate } from "@/components/intro/IntroGate";
 import { Header } from "@/components/layout/Header";
 import { SiteFooter } from "@/components/layout/SiteFooter";
@@ -14,8 +13,12 @@ export default async function HomePage() {
     <>
       <Header />
       <IntroGate>
-        <div className="space-shell">
-          <KineticBackground />
+        <div className="space-shell home-video-shell">
+          <div className="home-video-background" aria-hidden="true">
+            <video autoPlay loop muted playsInline preload="metadata">
+              <source src="/videos/home-background-4k.mp4" type="video/mp4" />
+            </video>
+          </div>
           <SectionGateway content={content} />
           <SiteFooter profile={content.profile} />
         </div>

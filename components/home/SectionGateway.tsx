@@ -2,9 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Mail } from "lucide-react";
+import { BaseCard } from "@/components/cards/BaseCard";
 import { Reveal } from "@/components/motion/Reveal";
-import { scrapbookImages, sectionStickers } from "@/components/scrapbook/assets";
+import { scrapbookImages } from "@/components/scrapbook/assets";
+import { SoftButton } from "@/components/ui/SoftButton";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Tag } from "@/components/ui/Tag";
 import { cn } from "@/lib/utils";
 import type { SiteContent, SectionKey } from "@/lib/types";
 
@@ -17,11 +21,11 @@ const imagePosition: Record<SectionKey, string> = {
   life: "object-[50%_38%]"
 };
 
-const stickerLayout: Record<SectionKey, string> = {
-  skills: "right-5 top-20 w-14 rotate-6 md:w-16",
-  experiences: "right-6 top-20 w-14 -rotate-3 md:w-16",
-  thoughts: "right-6 top-20 w-14 rotate-3 md:w-16",
-  life: "right-6 top-20 w-14 -rotate-6 md:w-16"
+const gatewayLayout: Record<SectionKey, string> = {
+  skills: "col-span-2 min-h-[310px] lg:col-span-5 lg:row-span-2 lg:min-h-0",
+  experiences: "min-h-[250px] lg:col-span-4 lg:min-h-0",
+  thoughts: "min-h-[250px] lg:col-span-3 lg:min-h-0",
+  life: "col-span-2 min-h-[270px] lg:col-span-7 lg:min-h-0"
 };
 
 function profileParagraphs(text: string) {
@@ -35,152 +39,117 @@ export function SectionGateway({ content }: { content: SiteContent }) {
   const profile = content.profile;
   const portraitImage = profile.portraitImage || scrapbookImages.journalAvatar;
   const contact = profile.contactLinks[0];
-  const descriptionBlocks = profileParagraphs(profile.description);
+  const descriptionBlocks = profileParagraphs(profile.description).slice(0, 2);
 
   return (
-    <main id="hero" className="container-space min-h-[100dvh] pt-20 pb-10 md:pt-[10.5rem]">
+    <main id="hero" className="container-space min-h-[100dvh] pb-12 pt-24 md:pt-36">
       <Reveal>
-        <section className="relative mb-8 overflow-hidden rounded-[28px] border border-border bg-popover/66 p-4 shadow-[0_18px_50px_rgb(61_57_41_/_0.08)] backdrop-blur-xl md:p-6">
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgb(255_255_255_/_0.46),transparent_44%),radial-gradient(circle_at_86%_20%,rgb(156_135_245_/_0.1),transparent_28%),radial-gradient(circle_at_14%_76%,rgb(201_100_66_/_0.09),transparent_32%)]" />
-          <div className="absolute left-0 top-8 hidden h-[calc(100%-4rem)] w-3 rounded-r-full bg-primary/68 md:block" />
-
-          <div className="relative z-10 grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
-            <div className="grid gap-4 sm:grid-cols-[180px_minmax(0,1fr)] lg:grid-cols-1">
-              <div className="relative aspect-[4/5] min-h-[220px] overflow-hidden rounded-[24px] border border-border bg-card shadow-[6px_7px_0_rgb(222_216_196_/_0.5)]">
+        <section className="paper-card overflow-hidden rounded-[var(--radius-xl)] p-5 sm:p-6 lg:p-8" aria-labelledby="home-profile-name">
+          <div className="absolute inset-y-8 left-0 hidden w-1.5 rounded-r-full bg-primary/78 md:block" aria-hidden="true" />
+          <div className="relative z-10 grid gap-7 lg:grid-cols-[190px_minmax(0,1fr)_280px] lg:gap-8">
+            <div className="order-2 grid gap-4 sm:grid-cols-[170px_minmax(0,1fr)] lg:order-1 lg:grid-cols-1">
+              <div className="relative aspect-[4/5] min-h-[220px] overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card shadow-[var(--shadow-soft)]">
                 <Image
                   src={portraitImage}
                   alt={`${profile.name}头像`}
                   fill
                   priority
-                  sizes="(min-width: 1024px) 190px, (min-width: 640px) 180px, 80vw"
+                  sizes="(min-width: 1024px) 190px, (min-width: 640px) 170px, 100vw"
                   className="object-cover"
                 />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/72 to-transparent" />
               </div>
 
-              <div className="grid content-start gap-3 rounded-[18px] border border-border bg-background/70 p-4">
-                <p className="mono text-xs text-primary">{profile.location}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {profile.disciplines.map((discipline) => (
-                    <span className="tag min-h-0 px-2 py-1 text-[10px]" key={discipline}>
-                      {discipline}
-                    </span>
+              <div className="content-start rounded-[var(--radius-md)] border border-border bg-background-soft/72 p-4">
+                <p className="eyebrow">{profile.location}</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {profile.disciplines.slice(0, 4).map((discipline) => (
+                    <Tag key={discipline}>{discipline}</Tag>
                   ))}
                 </div>
-                <p className="mono border-t border-border pt-3 text-[10px] leading-5 text-muted-foreground">
+                <p className="mono mt-4 border-t border-border pt-3 text-[10px] leading-5 text-muted-foreground">
                   {profile.footerLine}
                 </p>
               </div>
             </div>
 
-            <div className="grid content-between gap-6 py-1">
-              <div>
-                <p className="mono text-xs text-primary">{profile.status}</p>
-                <div className="mt-3 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
-                  <div>
-                    <h1 className="text-4xl font-semibold leading-none text-foreground md:text-6xl">
-                      {profile.name}
-                    </h1>
-                    <p className="mt-4 text-base leading-7 text-secondary-foreground md:text-lg">
-                      {profile.title}
-                    </p>
-                  </div>
-                  {contact ? (
-                    <a className="secondary-button focus-ring" href={contact.href}>
-                      {contact.label}
-                    </a>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                <div className="text-sm leading-7 text-muted-foreground">
-                  {descriptionBlocks.map((paragraph) => (
-                    <p className="mb-3 last:mb-0" key={paragraph}>
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-
-                <div className="grid gap-4">
-                  <p className="rounded-[18px] border border-border bg-background/62 p-4 text-sm leading-7 text-secondary-foreground">
-                    {profile.supportText}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {profile.tags.map((tag) => (
-                      <span className="tag min-h-0 px-2 py-1 text-[10px]" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+            <div className="order-1 lg:order-2">
+              <StatusBadge tone="accent">{profile.status}</StatusBadge>
+              <p className="eyebrow mt-6">Always Be Better</p>
+              <h1 id="home-profile-name" className="mt-2 text-5xl font-semibold leading-none tracking-[-0.04em] text-foreground sm:text-6xl lg:text-7xl">
+                {profile.name}
+              </h1>
+              <p className="mt-4 text-lg font-medium leading-8 text-foreground-soft sm:text-xl">{profile.title}</p>
+              <div className="mt-6 h-px bg-gradient-to-r from-primary/48 via-border to-transparent" aria-hidden="true" />
+              <div className="mt-6 max-w-2xl space-y-3 text-sm leading-7 text-muted-foreground sm:text-base sm:leading-8">
+                {descriptionBlocks.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
               </div>
             </div>
+
+            <aside className="order-3 flex flex-col gap-5 border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0">
+              <div>
+                <p className="eyebrow">Working Method</p>
+                <p className="mt-3 text-sm leading-7 text-foreground-soft">{profile.supportText}</p>
+              </div>
+              <div>
+                <p className="eyebrow text-muted-foreground">Core Systems</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {profile.tags.slice(0, 5).map((tag) => (
+                    <Tag key={tag}>{tag}</Tag>
+                  ))}
+                </div>
+              </div>
+              {contact ? (
+                <SoftButton asChild variant="primary" className="mt-auto w-full">
+                  <a href={contact.href}>
+                    <Mail className="h-4 w-4" strokeWidth={1.8} />
+                    {contact.label}
+                  </a>
+                </SoftButton>
+              ) : null}
+            </aside>
           </div>
         </section>
       </Reveal>
 
-      <Reveal delay={0.08}>
-        <div className="grid min-h-[430px] grid-cols-2 grid-rows-2 gap-2.5 sm:min-h-[520px] sm:gap-3 lg:h-[640px] lg:grid-cols-4 lg:grid-rows-1 lg:gap-4">
+      <Reveal delay={0.08} className="mt-5">
+        <section className="grid grid-cols-2 gap-3 lg:h-[590px] lg:grid-cols-12 lg:grid-rows-2 lg:gap-4" aria-label="主页内容入口">
           {sectionOrder.map((key, index) => {
             const item = content.showcases[key];
+
             return (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="focus-ring group relative isolate h-full w-full overflow-hidden rounded-[22px] border border-border bg-card shadow-[0_12px_34px_rgb(61_57_41_/_0.08)] transition-all duration-500 ease-out hover:-translate-y-1 hover:border-primary/45 hover:shadow-[0_20px_48px_rgb(61_57_41_/_0.12)]"
-              >
-                <Image
-                  src={item.image}
-                  alt={`${item.title}入口展示图`}
-                  fill
-                  priority={index < 2}
-                  sizes="(min-width: 1024px) 25vw, 50vw"
-                  className={cn(
-                    "object-cover transition duration-700 group-hover:scale-[1.025]",
-                    imagePosition[key]
-                  )}
-                />
-                <Image
-                  src={index % 2 === 0 ? scrapbookImages.tapeKraft : scrapbookImages.tapeGrid}
-                  alt=""
-                  width={130}
-                  height={60}
-                  className="pointer-events-none absolute left-1/2 top-4 z-10 h-auto w-24 -translate-x-1/2 -rotate-1 opacity-80 mix-blend-multiply md:w-28"
-                />
-                <Image
-                  src={sectionStickers[key]}
-                  alt=""
-                  width={92}
-                  height={82}
-                  className={cn(
-                    "pointer-events-none absolute z-10 h-auto opacity-80 mix-blend-multiply drop-shadow-[0_10px_16px_rgb(61_57_41_/_0.12)] transition duration-500 group-hover:-translate-y-1",
-                    stickerLayout[key]
-                  )}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-background/10 to-transparent transition duration-500" />
-                <div className="absolute inset-x-0 bottom-0 h-[46%] bg-[linear-gradient(180deg,transparent,rgb(250_249_245_/_0.92)_42%,rgb(250_249_245_/_0.98))]" />
-
-                <span className="liquid-glass-control absolute right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-full text-foreground transition group-hover:border-primary group-hover:text-primary">
-                  <ArrowUpRight className="h-4 w-4" strokeWidth={1.8} />
-                </span>
-
-                <div className="relative z-10 flex h-full flex-col justify-end p-2.5 transition-all duration-500 md:p-4">
-                  <div className="rounded-[16px] border border-border/80 bg-popover/80 p-3 shadow-[0_10px_26px_rgb(61_57_41_/_0.08)] backdrop-blur-xl md:p-5">
-                    <p className="mono text-[10px] text-primary/90 md:text-xs">{item.eyebrow}</p>
-                    <p className="mono mt-3 text-[10px] text-muted-foreground md:text-xs">{item.metric}</p>
-                    <h2 className="mt-2 text-xl font-semibold leading-none text-foreground md:text-4xl lg:text-[2.85rem]">
-                      {item.title}
-                    </h2>
-                    <p className="mt-2 line-clamp-1 text-[11px] leading-5 text-muted-foreground md:mt-3 md:line-clamp-2 md:text-sm md:leading-6">
-                      {item.description}
-                    </p>
+              <Link key={item.key} href={item.href} className={cn("focus-ring group block", gatewayLayout[key])}>
+                <BaseCard interactive featured={key === "skills"} className="h-full rounded-[var(--radius-lg)]">
+                  <Image
+                    src={item.image}
+                    alt={`${item.title}入口展示图`}
+                    fill
+                    priority={index < 2}
+                    sizes={key === "skills" ? "(min-width: 1024px) 42vw, 100vw" : "(min-width: 1024px) 58vw, 100vw"}
+                    className={cn("object-cover transition-transform duration-[var(--duration-slow)] ease-[var(--ease-out)] group-hover:scale-[1.015]", imagePosition[key])}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[rgb(45_41_34_/_0.82)] via-[rgb(45_41_34_/_0.12)] to-transparent" aria-hidden="true" />
+                  <div className="absolute inset-x-0 bottom-0 z-10 p-4 text-white sm:p-5">
+                    <p className="mono text-[10px] tracking-[0.08em] text-white/68">{item.eyebrow}</p>
+                    <div className="mt-2 flex items-end justify-between gap-4">
+                      <div>
+                        <h2 className={cn("font-semibold leading-none", key === "skills" ? "text-3xl sm:text-5xl" : "text-2xl sm:text-3xl")}>
+                          {item.title}
+                        </h2>
+                        <p className="mt-3 line-clamp-2 max-w-lg text-xs leading-6 text-white/74 sm:text-sm">{item.description}</p>
+                      </div>
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/28 bg-white/10" aria-hidden="true">
+                        <ArrowUpRight className="h-4 w-4" strokeWidth={1.8} />
+                      </span>
+                    </div>
+                    <p className="mono mt-3 text-[10px] text-white/62">{item.metric}</p>
                   </div>
-                </div>
+                </BaseCard>
               </Link>
             );
           })}
-        </div>
+        </section>
       </Reveal>
     </main>
   );
