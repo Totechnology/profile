@@ -93,17 +93,25 @@ function renumber(items: EditableItem[]) {
 export function SectionManager({
   section,
   items,
-  onChange
+  onChange,
+  onUploadStateChange
 }: {
   section: SectionKey;
   items: EditableItem[];
-  onChange: (items: EditableItem[]) => void;
+  onChange: (items: EditableItem[], options?: { persist?: boolean }) => void;
+  onUploadStateChange?: (uploading: boolean) => void;
 }) {
   const [selectedId, setSelectedId] = useState(items[0]?.id || "");
+  const [mediaUploading, setMediaUploading] = useState(false);
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) || items[0],
     [items, selectedId]
   );
+
+  function handleUploadState(uploading: boolean) {
+    setMediaUploading(uploading);
+    onUploadStateChange?.(uploading);
+  }
 
   function addItem() {
     const item = createEmptyItem(section, items.length + 1);
@@ -111,8 +119,8 @@ export function SectionManager({
     setSelectedId(item.id);
   }
 
-  function updateItem(next: EditableItem) {
-    onChange(items.map((item) => (item.id === next.id ? next : item)));
+  function updateItem(next: EditableItem, options?: { persist?: boolean }) {
+    onChange(items.map((item) => (item.id === next.id ? next : item)), options);
   }
 
   function deleteItem(id: string) {
@@ -138,7 +146,13 @@ export function SectionManager({
             <h2 className="text-lg font-semibold text-foreground">{sectionLabels[section]}</h2>
             <p className="mt-1 text-xs text-muted-foreground">{items.length} 张卡片</p>
           </div>
-          <button className="icon-button focus-ring" type="button" onClick={addItem} aria-label="新增卡片">
+          <button
+            className="icon-button focus-ring"
+            type="button"
+            onClick={addItem}
+            aria-label="新增卡片"
+            disabled={mediaUploading}
+          >
             <Plus className="h-4 w-4" strokeWidth={1.8} />
           </button>
         </div>
@@ -152,6 +166,7 @@ export function SectionManager({
                 "focus-ring group flex items-center gap-3 rounded-[var(--radius-sm)] border border-border bg-popover/50 p-3 text-left transition hover:border-primary/40 hover:bg-popover",
                 selectedItem?.id === item.id && "border-primary/45 bg-accent"
               )}
+              disabled={mediaUploading}
               onClick={() => setSelectedId(item.id)}
             >
               <span className="mono flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-muted text-xs text-muted-foreground">
@@ -182,6 +197,7 @@ export function SectionManager({
                   className="icon-button focus-ring"
                   type="button"
                   aria-label="上移"
+                  disabled={mediaUploading}
                   onClick={() => moveItem(selectedItem.id, -1)}
                 >
                   <ArrowUp className="h-4 w-4" strokeWidth={1.8} />
@@ -190,6 +206,7 @@ export function SectionManager({
                   className="icon-button focus-ring"
                   type="button"
                   aria-label="下移"
+                  disabled={mediaUploading}
                   onClick={() => moveItem(selectedItem.id, 1)}
                 >
                   <ArrowDown className="h-4 w-4" strokeWidth={1.8} />
@@ -198,13 +215,19 @@ export function SectionManager({
                   className="icon-button focus-ring"
                   type="button"
                   aria-label="删除"
+                  disabled={mediaUploading}
                   onClick={() => deleteItem(selectedItem.id)}
                 >
                   <Trash2 className="h-4 w-4" strokeWidth={1.8} />
                 </button>
               </div>
             </div>
-            <CardEditor section={section} item={selectedItem} onChange={updateItem} />
+            <CardEditor
+              section={section}
+              item={selectedItem}
+              onChange={updateItem}
+              onUploadStateChange={handleUploadState}
+            />
           </>
         ) : (
           <div className="flex min-h-[420px] items-center justify-center rounded-[var(--radius-sm)] border border-dashed border-border text-sm text-muted-foreground">

@@ -41,7 +41,7 @@ function getNoteType(item: BlogTimelineItem): NoteType {
 
 function TimelineCard({ item, index }: { item: BlogTimelineItem; index: number }) {
   const noteType = getNoteType(item);
-  const showImage = noteType === "featured" && Boolean(item.image);
+  const showImage = Boolean(item.image);
   const content = (
     <BaseCard
       interactive={Boolean(item.href)}
@@ -49,10 +49,27 @@ function TimelineCard({ item, index }: { item: BlogTimelineItem; index: number }
       decoration={noteType === "featured" && index === 0 ? "tape" : "none"}
       className={cn("p-4 sm:p-5", noteType === "quick-note" && "py-4")}
     >
-      <div className={cn("grid gap-4", showImage && "sm:grid-cols-[156px_minmax(0,1fr)] sm:items-center")}>
+      <div
+        className={cn(
+          "grid gap-4",
+          showImage && noteType !== "featured" && "grid-cols-[88px_minmax(0,1fr)] items-center sm:grid-cols-[112px_minmax(0,1fr)]",
+          showImage && noteType === "featured" && "sm:grid-cols-[156px_minmax(0,1fr)] sm:items-center"
+        )}
+      >
         {showImage && item.image ? (
-          <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-sm)] border border-border bg-muted sm:aspect-square">
-            <Image src={item.image} alt={item.title} fill sizes="(min-width: 768px) 156px, 100vw" className="object-cover" />
+          <div
+            className={cn(
+              "relative overflow-hidden rounded-[var(--radius-sm)] border border-border bg-muted",
+              noteType === "featured" ? "aspect-[4/3] sm:aspect-square" : "aspect-square"
+            )}
+          >
+            <Image
+              src={item.image}
+              alt={item.title}
+              fill
+              sizes={noteType === "featured" ? "(min-width: 768px) 156px, 100vw" : "(min-width: 768px) 112px, 100vw"}
+              className="object-cover"
+            />
           </div>
         ) : null}
 

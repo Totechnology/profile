@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   ExperienceCardItem,
   LifeCardItem,
@@ -75,13 +75,19 @@ function parseUploadPayload(payload: unknown) {
 export function CardEditor({
   section,
   item,
-  onChange
+  onChange,
+  onUploadStateChange
 }: {
   section: SectionKey;
   item: EditableItem;
-  onChange: (item: EditableItem) => void;
+  onChange: (item: EditableItem, options?: { persist?: boolean }) => void;
+  onUploadStateChange?: (uploading: boolean) => void;
 }) {
   const record = item as unknown as Record<string, unknown>;
+  const itemRef = useRef(item);
+  const onChangeRef = useRef(onChange);
+  itemRef.current = item;
+  onChangeRef.current = onChange;
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
@@ -91,35 +97,46 @@ export function CardEditor({
   }
 
   function update(key: string, value: unknown) {
-    onChange({ ...item, [key]: value } as EditableItem);
+    const next = { ...itemRef.current, [key]: value } as EditableItem;
+    itemRef.current = next;
+    onChangeRef.current(next);
   }
 
-  function getImages() {
-    const images = Array.isArray(record.images) ? (record.images as string[]) : [];
-    const cover = textValue("image");
+  function getImages(source: EditableItem = itemRef.current) {
+    const sourceRecord = source as unknown as Record<string, unknown>;
+    const images = Array.isArray(sourceRecord.images) ? (sourceRecord.images as string[]) : [];
+    const cover = typeof sourceRecord.image === "string" ? sourceRecord.image : "";
     return Array.from(new Set([...images, cover].filter(Boolean))).slice(0, MAX_ENTRY_IMAGES);
   }
 
-  function getStorageFiles() {
-    return Array.isArray(record.storageFiles)
-      ? record.storageFiles.filter(isStoredFileReference)
+  function getStorageFiles(source: EditableItem = itemRef.current) {
+    const sourceRecord = source as unknown as Record<string, unknown>;
+    return Array.isArray(sourceRecord.storageFiles)
+      ? sourceRecord.storageFiles.filter(isStoredFileReference)
       : [];
   }
 
-  function updateImages(images: string[], addedFiles: StoredFileReference[] = []) {
+  function updateImages(
+    images: string[],
+    addedFiles: StoredFileReference[] = [],
+    options?: { persist?: boolean }
+  ) {
+    const source = itemRef.current;
     const next = Array.from(new Set(images.map((image) => image.trim()).filter(Boolean))).slice(0, MAX_ENTRY_IMAGES);
     const filesByUrl = new Map(
-      [...getStorageFiles(), ...addedFiles]
+      [...getStorageFiles(source), ...addedFiles]
         .filter((file) => next.includes(file.url))
         .map((file) => [file.url, file])
     );
 
-    onChange({
-      ...item,
+    const nextItem = {
+      ...source,
       image: next[0] || "",
       images: next,
       storageFiles: Array.from(filesByUrl.values())
-    } as EditableItem);
+    } as EditableItem;
+    itemRef.current = nextItem;
+    onChangeRef.current(nextItem, options);
   }
 
   async function uploadImageFile(file: File) {
@@ -144,6 +161,7 @@ export function CardEditor({
 
   async function uploadImages(files: FileList | null) {
     if (!files?.length) return;
+    const uploadTargetId = itemRef.current.id;
     const currentImages = getImages();
     const remainingSlots = MAX_ENTRY_IMAGES - currentImages.length;
 
@@ -155,22 +173,33 @@ export function CardEditor({
     const selectedFiles = Array.from(files).slice(0, remainingSlots);
     const uploaded: Array<{ url: string; reference?: StoredFileReference }> = [];
     setUploading(true);
+    onUploadStateChange?.(true);
     setUploadError(files.length > remainingSlots ? `最多还能上传 ${remainingSlots} 张，已自动保留前 ${remainingSlots} 张。` : "");
 
     try {
       for (const file of selectedFiles) {
-        const result = await uploadImageFile(file);
-        if (result) uploaded.push(result);
+        try {
+          const result = await uploadImageFile(file);
+          if (result) uploaded.push(result);
+        } catch {
+          setUploadError("部分图片上传失败，已成功的图片仍会自动保存。");
+        }
+      }
+
+      if (uploaded.length) {
+        if (itemRef.current.id !== uploadTargetId) {
+          setUploadError("当前卡片已切换，已停止自动绑定图片，请重新选择图片。");
+          return;
+        }
+        updateImages(
+          [...getImages(), ...uploaded.map((entry) => entry.url)],
+          uploaded.flatMap((entry) => (entry.reference ? [entry.reference] : [])),
+          { persist: true }
+        );
       }
     } finally {
       setUploading(false);
-    }
-
-    if (uploaded.length) {
-      updateImages(
-        [...currentImages, ...uploaded.map((entry) => entry.url)],
-        uploaded.flatMap((entry) => (entry.reference ? [entry.reference] : []))
-      );
+      onUploadStateChange?.(false);
     }
   }
 
@@ -237,7 +266,9 @@ export function CardEditor({
               }}
             />
           </label>
-          <span className="text-xs text-muted-foreground">最多 4 张，第一张为封面。当前 {getImages().length}/4。</span>
+          <span className="text-xs text-muted-foreground">
+            最多 4 张，第一张为封面；上传完成会自动保存到 CloudBase。当前 {getImages().length}/4。
+          </span>
         </div>
       </div>
       {getImages().length ? (

@@ -167,6 +167,10 @@ function validateShowcases(value: unknown): Record<SectionKey, SectionShowcase> 
       description: requireString(showcase.description, `settings.showcases.${key}.description`, 10_000),
       href: requireString(showcase.href, `settings.showcases.${key}.href`, 4_096),
       image: requireString(showcase.image, `settings.showcases.${key}.image`, 4_096),
+      imageFile:
+        showcase.imageFile === undefined
+          ? undefined
+          : validateStoredFile(showcase.imageFile, `settings.showcases.${key}.imageFile`),
       metric: requireString(showcase.metric, `settings.showcases.${key}.metric`, 240),
       accent:
         showcase.accent === undefined

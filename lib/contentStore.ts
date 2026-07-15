@@ -8,14 +8,18 @@ import {
   getCloudBaseDatabase,
   getCloudBaseErrorDiagnostic
 } from "@/lib/cloudbase/server";
+import { getPortfolioMediaUrl } from "@/lib/cloudbase/storage";
 import { getEntrySlug } from "@/lib/slugs";
 import type {
+  ProfileMeta,
   PortfolioItemDocument,
   PortfolioSection,
   SectionItemMap,
   SectionKey,
+  SectionShowcase,
   SiteContent,
-  SiteSettingsDocument
+  SiteSettingsDocument,
+  StoredFileReference
 } from "@/lib/types";
 import { deepCloneContent, normalizeContent, sortByOrder } from "@/lib/utils";
 
@@ -168,6 +172,137 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+type CanonicalFileLink = {
+  fileID: string;
+  cloudPath: string;
+  originalUrl: string;
+  canonicalUrl: string;
+};
+
+function isStoredFileReference(value: unknown): value is StoredFileReference {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const file = value as Record<string, unknown>;
+  return (
+    typeof file.fileID === "string" &&
+    Boolean(file.fileID.trim()) &&
+    typeof file.cloudPath === "string" &&
+    typeof file.url === "string" &&
+    typeof file.size === "number" &&
+    typeof file.mimeType === "string"
+  );
+}
+
+function canonicalizeStoredFile(reference: StoredFileReference) {
+  const original = cloneJson(reference);
+  try {
+    const canonicalUrl = getPortfolioMediaUrl(original.fileID);
+    return {
+      reference: { ...original, url: canonicalUrl },
+      link: {
+        fileID: original.fileID,
+        cloudPath: original.cloudPath,
+        originalUrl: original.url,
+        canonicalUrl
+      } satisfies CanonicalFileLink
+    };
+  } catch {
+    // Invalid or foreign file IDs must never be turned into a trusted media route.
+    return { reference: original, link: null };
+  }
+}
+
+function isTemporarySignedUrlForFile(value: string, cloudPath: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+
+  const hasTemporarySignature = Array.from(parsed.searchParams.keys()).some((key) =>
+    /sign|signature|token|credential|expires|key-time/i.test(key)
+  );
+  if (!hasTemporarySignature) return false;
+
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(parsed.pathname);
+  } catch {
+    return false;
+  }
+  const normalizedPath = pathname.replace(/^\/+/, "");
+  const normalizedCloudPath = cloudPath.replace(/^\/+/, "");
+  return Boolean(normalizedCloudPath) && normalizedPath.endsWith(normalizedCloudPath);
+}
+
+function canonicalizeLinkedMediaUrl(value: string, links: CanonicalFileLink[]) {
+  const link = links.find(
+    (candidate) =>
+      value === candidate.canonicalUrl ||
+      value === candidate.originalUrl ||
+      value === candidate.fileID ||
+      isTemporarySignedUrlForFile(value, candidate.cloudPath)
+  );
+  return link?.canonicalUrl || value;
+}
+
+function canonicalizeItemMedia(raw: Record<string, unknown>) {
+  const item = cloneJson(raw);
+  if (!Array.isArray(item.storageFiles)) return item;
+
+  const links: CanonicalFileLink[] = [];
+  item.storageFiles = item.storageFiles.map((entry) => {
+    if (!isStoredFileReference(entry)) return entry;
+    const canonical = canonicalizeStoredFile(entry);
+    if (canonical.link) links.push(canonical.link);
+    return canonical.reference;
+  });
+
+  if (typeof item.image === "string") {
+    item.image = canonicalizeLinkedMediaUrl(item.image, links);
+  }
+  if (Array.isArray(item.images)) {
+    item.images = item.images.map((image) =>
+      typeof image === "string" ? canonicalizeLinkedMediaUrl(image, links) : image
+    );
+  }
+  return item;
+}
+
+function canonicalizeProfileMedia(profile: ProfileMeta): ProfileMeta {
+  const normalized = cloneJson(profile);
+  if (!isStoredFileReference(normalized.portraitFile)) return normalized;
+
+  const canonical = canonicalizeStoredFile(normalized.portraitFile);
+  normalized.portraitFile = canonical.reference;
+  if (canonical.link) {
+    normalized.portraitImage = canonicalizeLinkedMediaUrl(normalized.portraitImage, [canonical.link]);
+  }
+  return normalized;
+}
+
+function canonicalizeShowcaseMedia(showcase: SectionShowcase): SectionShowcase {
+  const normalized = cloneJson(showcase);
+  if (!isStoredFileReference(normalized.imageFile)) return normalized;
+
+  const canonical = canonicalizeStoredFile(normalized.imageFile);
+  normalized.imageFile = canonical.reference;
+  if (canonical.link) {
+    normalized.image = canonicalizeLinkedMediaUrl(normalized.image, [canonical.link]);
+  }
+  return normalized;
+}
+
+function canonicalizeShowcasesMedia(showcases: Record<SectionKey, SectionShowcase>) {
+  return Object.fromEntries(
+    (Object.keys(showcases) as SectionKey[]).map((key) => [
+      key,
+      canonicalizeShowcaseMedia(showcases[key])
+    ])
+  ) as Record<SectionKey, SectionShowcase>;
+}
+
 function stripUndefined(value: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
 }
@@ -201,23 +336,33 @@ function normalizeDateValue(value: unknown, fallback: string) {
 }
 
 function normalizeItemDocument(raw: Record<string, unknown>): PortfolioItemDocument {
-  const section = isPortfolioSection(raw.section) ? raw.section : "life";
-  const id = String(raw.id || raw._id || "");
+  const normalizedRaw = canonicalizeItemMedia(raw);
+  const section = isPortfolioSection(normalizedRaw.section) ? normalizedRaw.section : "life";
+  const id = String(normalizedRaw.id || normalizedRaw._id || "");
   const now = new Date().toISOString();
 
   return {
-    ...cloneJson(raw),
-    _id: String(raw._id || id),
+    ...normalizedRaw,
+    _id: String(normalizedRaw._id || id),
     id,
     section,
-    type: typeof raw.type === "string" && raw.type.trim() ? raw.type : defaultDocumentType[section],
-    title: typeof raw.title === "string" ? raw.title : "",
-    slug: typeof raw.slug === "string" && raw.slug.trim() ? raw.slug : undefined,
-    order: typeof raw.order === "number" && Number.isFinite(raw.order) ? raw.order : 999,
-    visible: raw.visible !== false,
-    featured: raw.featured === true,
-    createdAt: normalizeDateValue(raw.createdAt, now),
-    updatedAt: normalizeDateValue(raw.updatedAt, now)
+    type:
+      typeof normalizedRaw.type === "string" && normalizedRaw.type.trim()
+        ? normalizedRaw.type
+        : defaultDocumentType[section],
+    title: typeof normalizedRaw.title === "string" ? normalizedRaw.title : "",
+    slug:
+      typeof normalizedRaw.slug === "string" && normalizedRaw.slug.trim()
+        ? normalizedRaw.slug
+        : undefined,
+    order:
+      typeof normalizedRaw.order === "number" && Number.isFinite(normalizedRaw.order)
+        ? normalizedRaw.order
+        : 999,
+    visible: normalizedRaw.visible !== false,
+    featured: normalizedRaw.featured === true,
+    createdAt: normalizeDateValue(normalizedRaw.createdAt, now),
+    updatedAt: normalizeDateValue(normalizedRaw.updatedAt, now)
   } as PortfolioItemDocument;
 }
 
@@ -390,10 +535,16 @@ async function readCloudBaseSettings() {
 
   const seed = bundledSeedContent();
   const now = new Date().toISOString();
+  const profile = cloneJson(
+    (raw.profile as SiteSettingsDocument["profile"] | undefined) || seed.profile
+  );
+  const showcases = cloneJson(
+    (raw.showcases as SiteSettingsDocument["showcases"] | undefined) || seed.showcases
+  );
   return {
     _id: SITE_SETTINGS_DOCUMENT_ID,
-    profile: cloneJson((raw.profile as SiteSettingsDocument["profile"] | undefined) || seed.profile),
-    showcases: cloneJson((raw.showcases as SiteSettingsDocument["showcases"] | undefined) || seed.showcases),
+    profile: canonicalizeProfileMedia(profile),
+    showcases: canonicalizeShowcasesMedia(showcases),
     createdAt: normalizeDateValue(raw.createdAt, now),
     updatedAt: normalizeDateValue(raw.updatedAt, now)
   } satisfies SiteSettingsDocument;
@@ -753,10 +904,14 @@ export async function updateSiteSettings(
   try {
     const existing = await readCloudBaseSettings();
     const seed = bundledSeedContent();
+    const profile = patch.profile ? cloneJson(patch.profile) : existing?.profile || seed.profile;
+    const showcases = patch.showcases
+      ? cloneJson(patch.showcases)
+      : existing?.showcases || seed.showcases;
     const settings: SiteSettingsDocument = {
       _id: SITE_SETTINGS_DOCUMENT_ID,
-      profile: patch.profile ? cloneJson(patch.profile) : existing?.profile || seed.profile,
-      showcases: patch.showcases ? cloneJson(patch.showcases) : existing?.showcases || seed.showcases,
+      profile: canonicalizeProfileMedia(profile),
+      showcases: canonicalizeShowcasesMedia(showcases),
       createdAt: existing?.createdAt || now,
       updatedAt: now
     };

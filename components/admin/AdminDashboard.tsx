@@ -1,7 +1,7 @@
 "use client";
 
 import { DatabaseZap, LoaderCircle, LogOut, Save } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ProfileEditor } from "@/components/admin/ProfileEditor";
 import { SectionManager } from "@/components/admin/SectionManager";
 import type { SectionKey, SiteContent } from "@/lib/types";
@@ -21,37 +21,60 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
   const [content, setContent] = useState(initialContent);
   const [activeSection, setActiveSection] = useState<AdminPanel>("profile");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [mediaUploading, setMediaUploading] = useState(false);
   const [seedStatus, setSeedStatus] = useState<"idle" | "seeding" | "error">("idle");
   const [seedError, setSeedError] = useState("");
+  const contentRef = useRef(initialContent);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const saveSequenceRef = useRef(0);
+  const writeInProgress = status === "saving" || mediaUploading;
 
   const activeItems = useMemo(() => (activeSection === "profile" ? [] : content[activeSection]), [activeSection, content]);
 
-  async function saveContent() {
+  function updateContent(nextContent: SiteContent, options?: { persist?: boolean }) {
+    contentRef.current = nextContent;
+    setContent(nextContent);
+    if (options?.persist) void saveContent(nextContent);
+  }
+
+  function saveContent(snapshot = contentRef.current) {
+    const saveSequence = ++saveSequenceRef.current;
     setStatus("saving");
-    try {
+
+    const request = saveQueueRef.current.catch(() => undefined).then(async () => {
       const response = await fetch("/api/admin/content", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content: snapshot })
       });
 
       if (!response.ok) {
-        setStatus("error");
-        return;
+        throw new Error("content_save_failed");
       }
 
       const payload = (await response.json()) as { content?: SiteContent };
       if (!payload.content) {
-        setStatus("error");
-        return;
+        throw new Error("content_save_response_invalid");
       }
 
-      setContent(payload.content);
-      setStatus("saved");
-      window.setTimeout(() => setStatus("idle"), 1400);
-    } catch {
-      setStatus("error");
-    }
+      if (contentRef.current === snapshot) {
+        contentRef.current = payload.content;
+        setContent(payload.content);
+      }
+
+      if (saveSequence === saveSequenceRef.current) {
+        setStatus("saved");
+        window.setTimeout(() => {
+          if (saveSequence === saveSequenceRef.current) setStatus("idle");
+        }, 1400);
+      }
+    });
+
+    saveQueueRef.current = request.catch(() => {
+      if (saveSequence === saveSequenceRef.current) setStatus("error");
+    });
+
+    return saveQueueRef.current;
   }
 
   async function logout() {
@@ -97,7 +120,7 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
                 className="secondary-button focus-ring"
                 type="button"
                 onClick={seedCloudBase}
-                disabled={seedStatus === "seeding" || status === "saving"}
+                disabled={seedStatus === "seeding" || writeInProgress}
               >
                 {seedStatus === "seeding" ? (
                   <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" strokeWidth={1.8} />
@@ -107,13 +130,18 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
                 {seedStatus === "seeding" ? "初始化中" : "初始化 CloudBase 内容"}
               </button>
             ) : null}
-            <button className="secondary-button focus-ring" type="button" onClick={logout}>
+            <button className="secondary-button focus-ring" type="button" onClick={logout} disabled={writeInProgress}>
               <LogOut className="h-4 w-4" strokeWidth={1.8} />
               退出
             </button>
-            <button className="primary-button focus-ring" type="button" onClick={saveContent} disabled={status === "saving"}>
+            <button
+              className="primary-button focus-ring"
+              type="button"
+              onClick={() => void saveContent()}
+              disabled={writeInProgress}
+            >
               <Save className="h-4 w-4" strokeWidth={1.8} />
-              {status === "saving" ? "保存中" : "保存内容"}
+              {mediaUploading ? "图片上传中" : status === "saving" ? "保存中" : "保存内容"}
             </button>
           </div>
         </header>
@@ -146,6 +174,7 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
                   "focus-ring flex items-center justify-between rounded-[var(--radius-sm)] px-4 py-3 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground",
                   activeSection === "profile" && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                 )}
+                disabled={writeInProgress}
                 onClick={() => setActiveSection("profile")}
               >
                 <span>站点信息</span>
@@ -159,6 +188,7 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
                     "focus-ring flex items-center justify-between rounded-[var(--radius-sm)] px-4 py-3 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground",
                     activeSection === section && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                   )}
+                  disabled={writeInProgress}
                   onClick={() => setActiveSection(section)}
                 >
                   <span>{sectionLabels[section]}</span>
@@ -169,17 +199,22 @@ export function AdminDashboard({ initialContent, canSeed = false, seedNeeded = f
           </aside>
 
           {activeSection === "profile" ? (
-            <ProfileEditor content={content} onChange={setContent} />
+            <ProfileEditor
+              content={content}
+              onChange={updateContent}
+              onUploadStateChange={setMediaUploading}
+            />
           ) : (
             <SectionManager
               key={activeSection}
               section={activeSection}
               items={activeItems}
-              onChange={(items) =>
-                setContent((current) => ({
-                  ...current,
+              onUploadStateChange={setMediaUploading}
+              onChange={(items, options) =>
+                updateContent({
+                  ...contentRef.current,
                   [activeSection]: items
-                }))
+                }, options)
               }
             />
           )}

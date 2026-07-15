@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ProfileMeta, SectionShowcase, SiteContent, StoredFileReference } from "@/lib/types";
 
 const showcaseOrder: Array<keyof SiteContent["showcases"]> = ["skills", "experiences", "thoughts", "life"];
@@ -65,46 +65,65 @@ function parseUploadPayload(payload: unknown) {
 
 export function ProfileEditor({
   content,
-  onChange
+  onChange,
+  onUploadStateChange
 }: {
   content: SiteContent;
-  onChange: (content: SiteContent) => void;
+  onChange: (content: SiteContent, options?: { persist?: boolean }) => void;
+  onUploadStateChange?: (uploading: boolean) => void;
 }) {
-  const [uploadingPortrait, setUploadingPortrait] = useState(false);
+  const contentRef = useRef(content);
+  const onChangeRef = useRef(onChange);
+  contentRef.current = content;
+  onChangeRef.current = onChange;
+  const [uploadingTarget, setUploadingTarget] = useState<"portrait" | keyof SiteContent["showcases"] | null>(null);
   const [portraitUploadError, setPortraitUploadError] = useState("");
+  const [showcaseUploadError, setShowcaseUploadError] = useState<Partial<Record<keyof SiteContent["showcases"], string>>>({});
+
+  const emitChange = (nextContent: SiteContent, options?: { persist?: boolean }) => {
+    contentRef.current = nextContent;
+    onChangeRef.current(nextContent, options);
+  };
 
   const updateProfile = (key: keyof ProfileMeta, value: unknown) => {
-    onChange({
-      ...content,
+    const current = contentRef.current;
+    emitChange({
+      ...current,
       profile: {
-        ...content.profile,
+        ...current.profile,
         [key]: value
       }
     });
   };
 
-  const updateShowcase = (key: keyof SiteContent["showcases"], next: Partial<SectionShowcase>) => {
-    onChange({
-      ...content,
+  const updateShowcase = (
+    key: keyof SiteContent["showcases"],
+    next: Partial<SectionShowcase>,
+    options?: { persist?: boolean }
+  ) => {
+    const current = contentRef.current;
+    emitChange({
+      ...current,
       showcases: {
-        ...content.showcases,
+        ...current.showcases,
         [key]: {
-          ...content.showcases[key],
+          ...current.showcases[key],
           ...next
         }
       }
-    });
+    }, options);
   };
 
-  const updatePortraitImage = (url: string, file?: StoredFileReference) => {
-    onChange({
-      ...content,
+  const updatePortraitImage = (url: string, file?: StoredFileReference, options?: { persist?: boolean }) => {
+    const current = contentRef.current;
+    emitChange({
+      ...current,
       profile: {
-        ...content.profile,
+        ...current.profile,
         portraitImage: url,
-        portraitFile: file ?? (content.profile.portraitFile?.url === url ? content.profile.portraitFile : undefined)
+        portraitFile: file ?? (current.profile.portraitFile?.url === url ? current.profile.portraitFile : undefined)
       }
-    });
+    }, options);
   };
 
   const input = (key: keyof ProfileMeta, label: string, placeholder = "") => (
@@ -119,35 +138,53 @@ export function ProfileEditor({
     </label>
   );
 
-  async function uploadPortrait(file: File) {
-    setUploadingPortrait(true);
-    setPortraitUploadError("");
-
+  async function uploadFile(file: File) {
     const formData = new FormData();
     formData.append("file", file);
-
     const response = await fetch("/api/admin/upload", {
       method: "POST",
       body: formData
     });
-
-    setUploadingPortrait(false);
-
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as unknown;
-      setPortraitUploadError(
-        isRecord(payload) && typeof payload.message === "string" ? payload.message : "头像上传失败"
-      );
-      return;
+      throw new Error(isRecord(payload) && typeof payload.message === "string" ? payload.message : "图片上传失败");
     }
-
     const uploaded = parseUploadPayload(await response.json());
-    if (!uploaded) {
-      setPortraitUploadError("上传已完成，但服务器没有返回有效的头像地址。");
-      return;
-    }
+    if (!uploaded) throw new Error("上传已完成，但服务器没有返回有效的图片地址。");
+    return uploaded;
+  }
 
-    updatePortraitImage(uploaded.url, uploaded.reference);
+  async function uploadPortrait(file: File) {
+    setUploadingTarget("portrait");
+    setPortraitUploadError("");
+    onUploadStateChange?.(true);
+    try {
+      const uploaded = await uploadFile(file);
+      updatePortraitImage(uploaded.url, uploaded.reference, { persist: true });
+    } catch (error) {
+      setPortraitUploadError(error instanceof Error ? error.message : "头像上传失败");
+    } finally {
+      setUploadingTarget(null);
+      onUploadStateChange?.(false);
+    }
+  }
+
+  async function uploadShowcase(key: keyof SiteContent["showcases"], file: File) {
+    setUploadingTarget(key);
+    setShowcaseUploadError((current) => ({ ...current, [key]: "" }));
+    onUploadStateChange?.(true);
+    try {
+      const uploaded = await uploadFile(file);
+      updateShowcase(key, { image: uploaded.url, imageFile: uploaded.reference }, { persist: true });
+    } catch (error) {
+      setShowcaseUploadError((current) => ({
+        ...current,
+        [key]: error instanceof Error ? error.message : "入口图片上传失败"
+      }));
+    } finally {
+      setUploadingTarget(null);
+      onUploadStateChange?.(false);
+    }
   }
 
   const portraitField = (
@@ -173,12 +210,12 @@ export function ProfileEditor({
             </div>
           )}
           <label className="secondary-button focus-ring cursor-pointer">
-            {uploadingPortrait ? "上传中" : "选择头像"}
+            {uploadingTarget === "portrait" ? "上传中" : "选择头像"}
             <input
               className="sr-only"
               type="file"
               accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-              disabled={uploadingPortrait}
+              disabled={uploadingTarget !== null}
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) void uploadPortrait(file);
@@ -267,10 +304,47 @@ export function ProfileEditor({
                     眉标
                     <input className="admin-input" value={item.eyebrow} onChange={(event) => updateShowcase(key, { eyebrow: event.target.value })} />
                   </label>
-                  <label className="admin-label">
-                    图片路径
-                    <input className="admin-input" value={item.image} onChange={(event) => updateShowcase(key, { image: event.target.value })} />
-                  </label>
+                  <div className="admin-label">
+                    <span>入口图片</span>
+                    <div className="grid gap-3 rounded-[var(--radius-sm)] border border-border bg-popover/45 p-3 sm:grid-cols-[112px_minmax(0,1fr)] sm:items-center">
+                      <img
+                        src={item.image}
+                        alt={`${item.title}入口图片预览`}
+                        className="aspect-[4/3] w-full rounded-[var(--radius-sm)] border border-border bg-muted object-cover"
+                      />
+                      <div className="grid gap-2">
+                        <input
+                          className="admin-input"
+                          value={item.image}
+                          onChange={(event) =>
+                            updateShowcase(key, {
+                              image: event.target.value,
+                              imageFile: item.imageFile?.url === event.target.value ? item.imageFile : undefined
+                            })
+                          }
+                          placeholder="/images/... 或上传到 CloudBase"
+                        />
+                        <label className="secondary-button focus-ring w-fit cursor-pointer">
+                          {uploadingTarget === key ? "上传中" : "上传入口图片"}
+                          <input
+                            className="sr-only"
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                            disabled={uploadingTarget !== null}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) void uploadShowcase(key, file);
+                              event.target.value = "";
+                            }}
+                          />
+                        </label>
+                        <span className="text-xs text-muted-foreground">上传完成会自动保存并在首页真实展示。</span>
+                        {showcaseUploadError[key] ? (
+                          <span className="text-sm text-destructive">{showcaseUploadError[key]}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
                   <label className="admin-label">
                     指标
                     <input className="admin-input" value={item.metric} onChange={(event) => updateShowcase(key, { metric: event.target.value })} />

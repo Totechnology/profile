@@ -42,6 +42,7 @@ export type SectionShowcase = {
   description: string;
   href: string;
   image: string;
+  imageFile?: StoredFileReference;
   metric: string;
   accent?: string;
 };

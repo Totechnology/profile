@@ -53,7 +53,7 @@ function storageFailure(action: string, error: unknown) {
   return new PortfolioStorageError(`CloudBase 云存储${action}失败：${message}`);
 }
 
-function getPortfolioMediaUrl(fileID: string) {
+export function getPortfolioMediaUrl(fileID: string) {
   assertPortfolioFileID(fileID);
   return `/api/media/${Buffer.from(fileID, "utf8").toString("base64url")}`;
 }
