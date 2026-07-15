@@ -609,9 +609,10 @@ CLOUDBASE_ENV_ID=travel-media-gallery-d1a83223409
 ADMIN_PASSWORD=replace-me
 AUTH_SECRET=replace-with-long-random-secret
 ALLOW_CLOUDBASE_SEED=false
+HEALTH_DEBUG=false
 ```
 
-不要提交真实密码或 `AUTH_SECRET`，也不要创建包含密码或私密凭证的 `NEXT_PUBLIC_*` 环境变量。`ALLOW_CLOUDBASE_SEED` 只在首次迁移期间临时开启。
+不要提交真实密码、`AUTH_SECRET` 或 CloudBase 服务端凭据，也不要创建包含密码或私密凭证的 `NEXT_PUBLIC_*` 环境变量。`ALLOW_CLOUDBASE_SEED` 只在首次迁移期间临时开启；`HEALTH_DEBUG` 只在排障时临时设为 `true`，完成后立即恢复为 `false`。
 
 ---
 

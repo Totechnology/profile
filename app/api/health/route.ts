@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  getSiteSettings,
+  checkContentStoreHealth,
   isCloudBaseConfigured,
   usesLocalContentStore
 } from "@/lib/contentStore";
+import { getCloudBaseErrorDiagnostic } from "@/lib/cloudbase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export async function GET() {
   const startedAt = Date.now();
   const local = usesLocalContentStore();
   const cloudBaseConfigured = isCloudBaseConfigured();
+  const debug = process.env.HEALTH_DEBUG?.trim().toLowerCase() === "true";
   const headers = { "Cache-Control": "no-store" };
 
   if (!local && !cloudBaseConfigured) {
@@ -22,6 +24,12 @@ export async function GET() {
         status: "unhealthy",
         store: "cloudbase",
         reason: "configuration_missing",
+        ...(debug
+          ? {
+              errorName: "CloudBaseConfigurationError",
+              errorCode: "CLOUDBASE_ENV_MISSING"
+            }
+          : {}),
         responseTimeMs: Date.now() - startedAt
       },
       { status: 503, headers }
@@ -29,7 +37,7 @@ export async function GET() {
   }
 
   try {
-    await getSiteSettings();
+    await checkContentStoreHealth();
     return NextResponse.json(
       {
         ok: true,
@@ -41,7 +49,13 @@ export async function GET() {
       { headers }
     );
   } catch (error) {
-    console.error("[api:health]", error);
+    const diagnostic = getCloudBaseErrorDiagnostic(error);
+    console.error("[api:health]", {
+      event: "data_store_unavailable",
+      category: diagnostic.category,
+      errorName: diagnostic.errorName,
+      errorCode: diagnostic.errorCode
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -49,6 +63,12 @@ export async function GET() {
         status: "unhealthy",
         store: local ? "local" : "cloudbase",
         reason: "data_store_unavailable",
+        ...(debug
+          ? {
+              errorName: diagnostic.errorName,
+              errorCode: diagnostic.errorCode
+            }
+          : {}),
         responseTimeMs: Date.now() - startedAt
       },
       { status: 503, headers }

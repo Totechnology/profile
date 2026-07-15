@@ -4,7 +4,10 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import seedContent from "@/data/cloudbase-seed.json";
-import { getCloudBaseDatabase } from "@/lib/cloudbase/server";
+import {
+  getCloudBaseDatabase,
+  getCloudBaseErrorDiagnostic
+} from "@/lib/cloudbase/server";
 import { getEntrySlug } from "@/lib/slugs";
 import type {
   PortfolioItemDocument,
@@ -100,6 +103,41 @@ export class ContentConflictError extends ContentStoreError {
   }
 }
 
+type CloudBaseOperationContext = {
+  operation: string;
+  collection: string;
+  fallbackCode: string;
+  message: string;
+};
+
+const cloudBaseCategoryCodes = {
+  initialization_failed: "CLOUDBASE_INITIALIZATION_FAILED",
+  permission_denied: "CLOUDBASE_PERMISSION_DENIED",
+  collection_not_found: "CLOUDBASE_COLLECTION_NOT_FOUND"
+} as const;
+
+function asCloudBaseStoreError(error: unknown, context: CloudBaseOperationContext) {
+  if (error instanceof ContentStoreError) return error;
+
+  const diagnostic = getCloudBaseErrorDiagnostic(error);
+  const code =
+    diagnostic.errorCode !== "CLOUDBASE_REQUEST_FAILED"
+      ? diagnostic.errorCode
+      : diagnostic.category === "request_failed"
+        ? context.fallbackCode
+        : cloudBaseCategoryCodes[diagnostic.category];
+
+  console.error("[cloudbase:database]", {
+    event: diagnostic.category,
+    operation: context.operation,
+    collection: context.collection,
+    errorName: diagnostic.errorName,
+    errorCode: diagnostic.errorCode
+  });
+
+  return new ContentStoreError(context.message, code);
+}
+
 function bundledSeedContent(): SiteContent {
   return normalizeContent(deepCloneContent(seedContent as SiteContent));
 }
@@ -144,12 +182,12 @@ function withoutSettingsDatabaseId(document: SiteSettingsDocument) {
   return stripUndefined(payload as unknown as Record<string, unknown>);
 }
 
-function ensureDatabaseResult(result: { code?: string; message?: string }, action: string) {
+function ensureDatabaseResult(
+  result: { code?: string; message?: string },
+  context: CloudBaseOperationContext
+) {
   if (!result.code) return;
-  throw new ContentStoreError(
-    `CloudBase ${action}失败（${result.code}）。`,
-    "CLOUDBASE_REQUEST_FAILED"
-  );
+  throw asCloudBaseStoreError(result, context);
 }
 
 function isPortfolioSection(value: unknown): value is PortfolioSection {
@@ -319,7 +357,12 @@ async function readAllCloudBaseItems() {
 
   for (let offset = 0; ; offset += queryPageSize) {
     const result = await collection.skip(offset).limit(queryPageSize).get();
-    ensureDatabaseResult(result, "读取内容");
+    ensureDatabaseResult(result, {
+      operation: "read_items",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_READ_FAILED",
+      message: "CloudBase 内容读取失败。"
+    });
     const page = result.data.map((entry) => normalizeItemDocument(entry as Record<string, unknown>));
     items.push(...page);
     if (page.length < queryPageSize) break;
@@ -336,7 +379,12 @@ async function readCloudBaseSettings() {
     .collection(PORTFOLIO_SETTINGS_COLLECTION)
     .doc(SITE_SETTINGS_DOCUMENT_ID)
     .get();
-  ensureDatabaseResult(result, "读取站点设置");
+  ensureDatabaseResult(result, {
+    operation: "read_settings",
+    collection: PORTFOLIO_SETTINGS_COLLECTION,
+    fallbackCode: "CLOUDBASE_SETTINGS_READ_FAILED",
+    message: "CloudBase 站点设置读取失败。"
+  });
   const raw = result.data[0] as Record<string, unknown> | undefined;
   if (!raw) return null;
 
@@ -354,11 +402,21 @@ async function readCloudBaseSettings() {
 async function findCloudBaseItem(id: string) {
   const collection = getCloudBaseDatabase().collection(PORTFOLIO_ITEMS_COLLECTION);
   const directResult = await collection.doc(id).get();
-  ensureDatabaseResult(directResult, "读取内容");
+  ensureDatabaseResult(directResult, {
+    operation: "read_item_by_document_id",
+    collection: PORTFOLIO_ITEMS_COLLECTION,
+    fallbackCode: "CLOUDBASE_READ_FAILED",
+    message: "CloudBase 内容读取失败。"
+  });
   if (directResult.data[0]) return normalizeItemDocument(directResult.data[0] as Record<string, unknown>);
 
   const idResult = await collection.where({ id }).limit(1).get();
-  ensureDatabaseResult(idResult, "读取内容");
+  ensureDatabaseResult(idResult, {
+    operation: "read_item_by_content_id",
+    collection: PORTFOLIO_ITEMS_COLLECTION,
+    fallbackCode: "CLOUDBASE_READ_FAILED",
+    message: "CloudBase 内容读取失败。"
+  });
   return idResult.data[0]
     ? normalizeItemDocument(idResult.data[0] as Record<string, unknown>)
     : null;
@@ -380,8 +438,12 @@ export async function getAllItems(options?: {
     try {
       items = await readAllCloudBaseItems();
     } catch (error) {
-      if (error instanceof ContentStoreError) throw error;
-      throw new ContentStoreError("CloudBase 内容读取失败。", "CLOUDBASE_READ_FAILED", error);
+      throw asCloudBaseStoreError(error, {
+        operation: "read_items",
+        collection: PORTFOLIO_ITEMS_COLLECTION,
+        fallbackCode: "CLOUDBASE_READ_FAILED",
+        message: "CloudBase 内容读取失败。"
+      });
     }
   }
 
@@ -408,8 +470,12 @@ export async function getItemById(id: string, options?: { includeHidden?: boolea
     const item = await findCloudBaseItem(id);
     return item && (options?.includeHidden !== false || item.visible) ? item : null;
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 内容读取失败。", "CLOUDBASE_READ_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "read_item",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_READ_FAILED",
+      message: "CloudBase 内容读取失败。"
+    });
   }
 }
 
@@ -460,11 +526,20 @@ export async function createItem(input: PortfolioItemInput) {
       .collection(PORTFOLIO_ITEMS_COLLECTION)
       .doc(document._id)
       .set(withoutDatabaseId(document));
-    ensureDatabaseResult(result, "新增内容");
+    ensureDatabaseResult(result, {
+      operation: "create_item",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_CREATE_FAILED",
+      message: "CloudBase 内容新增失败。"
+    });
     return document;
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 内容新增失败。", "CLOUDBASE_CREATE_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "create_item",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_CREATE_FAILED",
+      message: "CloudBase 内容新增失败。"
+    });
   }
 }
 
@@ -513,11 +588,20 @@ export async function updateItem(id: string, patch: PortfolioItemUpdate) {
       .collection(PORTFOLIO_ITEMS_COLLECTION)
       .doc(existing._id)
       .update(withoutDatabaseId(updated));
-    ensureDatabaseResult(result, "更新内容");
+    ensureDatabaseResult(result, {
+      operation: "update_item",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_UPDATE_FAILED",
+      message: "CloudBase 内容更新失败。"
+    });
     return updated;
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 内容更新失败。", "CLOUDBASE_UPDATE_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "update_item",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_UPDATE_FAILED",
+      message: "CloudBase 内容更新失败。"
+    });
   }
 }
 
@@ -539,12 +623,21 @@ export async function deleteItem(id: string) {
       .collection(PORTFOLIO_ITEMS_COLLECTION)
       .doc(existing._id)
       .remove();
-    ensureDatabaseResult(result, "删除内容");
+    ensureDatabaseResult(result, {
+      operation: "delete_item",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_DELETE_FAILED",
+      message: "CloudBase 内容删除失败。"
+    });
     if (result.deleted !== 1) throw new ContentItemNotFoundError(id);
     return { id: existing.id, deleted: true };
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 内容删除失败。", "CLOUDBASE_DELETE_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "delete_item",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_DELETE_FAILED",
+      message: "CloudBase 内容删除失败。"
+    });
   }
 }
 
@@ -574,18 +667,27 @@ export async function reorderItems(section: PortfolioSection, ids: string[]) {
     return getItemsBySection(section);
   }
 
-  const collection = getCloudBaseDatabase().collection(PORTFOLIO_ITEMS_COLLECTION);
   const updatedAt = new Date().toISOString();
   try {
+    const collection = getCloudBaseDatabase().collection(PORTFOLIO_ITEMS_COLLECTION);
     for (const [index, id] of ids.entries()) {
       const item = existing.find((entry) => entry.id === id)!;
       const result = await collection.doc(item._id).update({ order: index + 1, updatedAt });
-      ensureDatabaseResult(result, "更新内容排序");
+      ensureDatabaseResult(result, {
+        operation: "reorder_items",
+        collection: PORTFOLIO_ITEMS_COLLECTION,
+        fallbackCode: "CLOUDBASE_REORDER_FAILED",
+        message: "CloudBase 内容排序更新失败。"
+      });
     }
     return getItemsBySection(section);
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 内容排序更新失败。", "CLOUDBASE_REORDER_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "reorder_items",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_REORDER_FAILED",
+      message: "CloudBase 内容排序更新失败。"
+    });
   }
 }
 
@@ -616,8 +718,12 @@ export async function getSiteSettings(): Promise<SiteSettingsDocument> {
       updatedAt: now
     };
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 站点设置读取失败。", "CLOUDBASE_SETTINGS_READ_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "read_settings",
+      collection: PORTFOLIO_SETTINGS_COLLECTION,
+      fallbackCode: "CLOUDBASE_SETTINGS_READ_FAILED",
+      message: "CloudBase 站点设置读取失败。"
+    });
   }
 }
 
@@ -660,11 +766,20 @@ export async function updateSiteSettings(
     const result = existing
       ? await reference.update(withoutSettingsDatabaseId(settings))
       : await reference.set(withoutSettingsDatabaseId(settings));
-    ensureDatabaseResult(result, "更新站点设置");
+    ensureDatabaseResult(result, {
+      operation: "update_settings",
+      collection: PORTFOLIO_SETTINGS_COLLECTION,
+      fallbackCode: "CLOUDBASE_SETTINGS_UPDATE_FAILED",
+      message: "CloudBase 站点设置更新失败。"
+    });
     return settings;
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 站点设置更新失败。", "CLOUDBASE_SETTINGS_UPDATE_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "update_settings",
+      collection: PORTFOLIO_SETTINGS_COLLECTION,
+      fallbackCode: "CLOUDBASE_SETTINGS_UPDATE_FAILED",
+      message: "CloudBase 站点设置更新失败。"
+    });
   }
 }
 
@@ -687,8 +802,12 @@ export async function getSiteContent(options?: { includeHidden?: boolean }): Pro
     if (!items.length && !settings) return bundledSeedContent();
     return documentsToContent(items, settings, options);
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 站点内容读取失败。", "CLOUDBASE_READ_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "read_site_content",
+      collection: `${PORTFOLIO_ITEMS_COLLECTION},${PORTFOLIO_SETTINGS_COLLECTION}`,
+      fallbackCode: "CLOUDBASE_READ_FAILED",
+      message: "CloudBase 站点内容读取失败。"
+    });
   }
 }
 
@@ -699,12 +818,13 @@ export async function saveSiteContent(content: SiteContent): Promise<SiteContent
   assertCloudBaseAvailable();
   const now = new Date().toISOString();
   const desiredDocuments = contentToDocuments(normalized, { now });
-  const existingDocuments = await readAllCloudBaseItems();
-  const existingById = new Map(existingDocuments.map((document) => [document.id, document]));
-  const desiredIds = new Set(desiredDocuments.map((document) => document.id));
-  const collection = getCloudBaseDatabase().collection(PORTFOLIO_ITEMS_COLLECTION);
 
   try {
+    const existingDocuments = await readAllCloudBaseItems();
+    const existingById = new Map(existingDocuments.map((document) => [document.id, document]));
+    const desiredIds = new Set(desiredDocuments.map((document) => document.id));
+    const collection = getCloudBaseDatabase().collection(PORTFOLIO_ITEMS_COLLECTION);
+
     await updateSiteSettings({ profile: normalized.profile, showcases: normalized.showcases });
 
     for (const desired of desiredDocuments) {
@@ -719,19 +839,33 @@ export async function saveSiteContent(content: SiteContent): Promise<SiteContent
       const result = existing
         ? await reference.update(withoutDatabaseId(document))
         : await reference.set(withoutDatabaseId(document));
-      ensureDatabaseResult(result, existing ? "更新内容" : "新增内容");
+      ensureDatabaseResult(result, {
+        operation: existing ? "bulk_update_item" : "bulk_create_item",
+        collection: PORTFOLIO_ITEMS_COLLECTION,
+        fallbackCode: "CLOUDBASE_SAVE_FAILED",
+        message: "CloudBase 站点内容保存失败。"
+      });
     }
 
     for (const existing of existingDocuments) {
       if (desiredIds.has(existing.id)) continue;
       const result = await collection.doc(existing._id).remove();
-      ensureDatabaseResult(result, "删除内容");
+      ensureDatabaseResult(result, {
+        operation: "bulk_delete_item",
+        collection: PORTFOLIO_ITEMS_COLLECTION,
+        fallbackCode: "CLOUDBASE_SAVE_FAILED",
+        message: "CloudBase 站点内容保存失败。"
+      });
     }
 
     return getSiteContent({ includeHidden: true });
   } catch (error) {
-    if (error instanceof ContentStoreError) throw error;
-    throw new ContentStoreError("CloudBase 站点内容保存失败。", "CLOUDBASE_SAVE_FAILED", error);
+    throw asCloudBaseStoreError(error, {
+      operation: "save_site_content",
+      collection: `${PORTFOLIO_ITEMS_COLLECTION},${PORTFOLIO_SETTINGS_COLLECTION}`,
+      fallbackCode: "CLOUDBASE_SAVE_FAILED",
+      message: "CloudBase 站点内容保存失败。"
+    });
   }
 }
 
@@ -747,13 +881,60 @@ export async function getContentStoreState(): Promise<ContentStoreState> {
   }
 
   assertCloudBaseAvailable();
-  const [items, settings] = await Promise.all([readAllCloudBaseItems(), readCloudBaseSettings()]);
-  return {
-    mode: "cloudbase",
-    itemCount: items.length,
-    hasSettings: Boolean(settings),
-    empty: items.length === 0 && !settings
-  };
+  try {
+    const [items, settings] = await Promise.all([readAllCloudBaseItems(), readCloudBaseSettings()]);
+    return {
+      mode: "cloudbase",
+      itemCount: items.length,
+      hasSettings: Boolean(settings),
+      empty: items.length === 0 && !settings
+    };
+  } catch (error) {
+    throw asCloudBaseStoreError(error, {
+      operation: "read_store_state",
+      collection: `${PORTFOLIO_ITEMS_COLLECTION},${PORTFOLIO_SETTINGS_COLLECTION}`,
+      fallbackCode: "CLOUDBASE_READ_FAILED",
+      message: "CloudBase 数据状态读取失败。"
+    });
+  }
+}
+
+export async function checkContentStoreHealth() {
+  if (usesLocalContentStore()) {
+    await readLocalContent();
+    return;
+  }
+
+  assertCloudBaseAvailable();
+  try {
+    const database = getCloudBaseDatabase();
+    const [itemsResult, settingsResult] = await Promise.all([
+      database.collection(PORTFOLIO_ITEMS_COLLECTION).limit(1).get(),
+      database
+        .collection(PORTFOLIO_SETTINGS_COLLECTION)
+        .doc(SITE_SETTINGS_DOCUMENT_ID)
+        .get()
+    ]);
+    ensureDatabaseResult(itemsResult, {
+      operation: "health_probe_items",
+      collection: PORTFOLIO_ITEMS_COLLECTION,
+      fallbackCode: "CLOUDBASE_HEALTH_CHECK_FAILED",
+      message: "CloudBase 内容集合健康检查失败。"
+    });
+    ensureDatabaseResult(settingsResult, {
+      operation: "health_probe_settings",
+      collection: PORTFOLIO_SETTINGS_COLLECTION,
+      fallbackCode: "CLOUDBASE_HEALTH_CHECK_FAILED",
+      message: "CloudBase 设置集合健康检查失败。"
+    });
+  } catch (error) {
+    throw asCloudBaseStoreError(error, {
+      operation: "health_probe",
+      collection: `${PORTFOLIO_ITEMS_COLLECTION},${PORTFOLIO_SETTINGS_COLLECTION}`,
+      fallbackCode: "CLOUDBASE_HEALTH_CHECK_FAILED",
+      message: "CloudBase 数据库健康检查失败。"
+    });
+  }
 }
 
 export function getBundledSeedContent() {
@@ -781,5 +962,6 @@ export const contentStore = {
   reorderItems,
   getSiteSettings,
   updateSiteSettings,
+  checkHealth: checkContentStoreHealth,
   getState: getContentStoreState
 };

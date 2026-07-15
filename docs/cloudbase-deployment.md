@@ -75,9 +75,12 @@ CLOUDBASE_ENV_ID=travel-media-gallery-d1a83223409
 ADMIN_PASSWORD=<生产管理员密码>
 AUTH_SECRET=<独立的强随机值>
 ALLOW_CLOUDBASE_SEED=false
+HEALTH_DEBUG=false
 ```
 
-只有执行首次迁移时才临时把 `ALLOW_CLOUDBASE_SEED` 设为 `true`。不要创建 `NEXT_PUBLIC_ADMIN_PASSWORD`、`NEXT_PUBLIC_AUTH_SECRET` 或任何包含 CloudBase 私密凭证的 `NEXT_PUBLIC_*` 变量。
+只有执行首次迁移时才临时把 `ALLOW_CLOUDBASE_SEED` 设为 `true`。标准 CloudBase Run 容器应由平台注入同环境临时凭据，不要手工保存永久 `SecretId` / `SecretKey`。如果健康检查的脱敏错误码明确为 `CLOUDBASE_CREDENTIALS_MISSING`，则在当前服务版本的“API key 设置”中选择服务端 API Key，让平台注入 `CLOUDBASE_APIKEY`；不要选择 Publishable Key，也不要手工复制到代码或 `NEXT_PUBLIC_*` 变量。
+
+排障时可以把 `HEALTH_DEBUG` 临时设为 `true` 并发布新版本。此时 `/api/health` 只额外返回脱敏后的 `errorName` 和 `errorCode`，不会返回请求头、密钥、完整错误或堆栈。确认原因后立即恢复为 `false` 并再次发布。
 
 ## 3. 部署云托管服务
 
