@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getCloudBaseStorage } from "@/lib/cloudbase/server";
+import { getCloudBaseEnvId, getCloudBaseStorage } from "@/lib/cloudbase/server";
 import type { StoredFileReference } from "@/lib/types";
 
 export const PORTFOLIO_STORAGE_PREFIX = "personal-portfolio/";
@@ -24,6 +24,27 @@ function assertPortfolioCloudPath(cloudPath: string) {
   }
 }
 
+function assertPortfolioFileID(fileID: string) {
+  const scheme = "cloud://";
+  const pathStart = fileID.indexOf("/", scheme.length);
+  if (!fileID.startsWith(scheme) || pathStart <= scheme.length) {
+    throw new PortfolioStorageError("云存储 fileID 格式无效。");
+  }
+
+  const authority = fileID.slice(scheme.length, pathStart);
+  if (!authority.startsWith(`${getCloudBaseEnvId()}.`)) {
+    throw new PortfolioStorageError("云存储 fileID 不属于当前 CloudBase 环境。");
+  }
+
+  let cloudPath: string;
+  try {
+    cloudPath = decodeURIComponent(fileID.slice(pathStart + 1));
+  } catch (error) {
+    throw new PortfolioStorageError("云存储 fileID 路径编码无效。", error);
+  }
+  assertPortfolioCloudPath(cloudPath);
+}
+
 function storageFailure(action: string, error: unknown) {
   const message =
     error && typeof error === "object" && "message" in error && typeof error.message === "string"
@@ -32,36 +53,22 @@ function storageFailure(action: string, error: unknown) {
   return new PortfolioStorageError(`CloudBase 云存储${action}失败：${message}`);
 }
 
-export async function portfolioFileExists(cloudPath: string) {
-  assertPortfolioCloudPath(cloudPath);
-  const result = await getCloudBaseStorage().exists(cloudPath);
-  if (result.error || result.data === null) throw storageFailure("检查", result.error);
-  return result.data;
+function getPortfolioMediaUrl(fileID: string) {
+  assertPortfolioFileID(fileID);
+  return `/api/media/${Buffer.from(fileID, "utf8").toString("base64url")}`;
 }
 
-export async function getPortfolioFileReference(
-  cloudPath: string,
-  fallback: { size: number; mimeType: string; fileID?: string }
-): Promise<StoredFileReference> {
-  assertPortfolioCloudPath(cloudPath);
-  const storage = getCloudBaseStorage();
-  const [infoResult, urlResult] = await Promise.all([
-    storage.info(cloudPath),
-    storage.getPublicUrl(cloudPath)
-  ]);
-
-  if (infoResult.error || !infoResult.data) throw storageFailure("读取元数据", infoResult.error);
-  if (!("data" in urlResult) || !urlResult.data) {
-    throw storageFailure("生成展示地址", "error" in urlResult ? urlResult.error : undefined);
+export function decodePortfolioFileToken(token: string) {
+  if (!token || token.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    throw new PortfolioStorageError("媒体访问令牌格式无效。");
   }
 
-  return {
-    fileID: fallback.fileID || infoResult.data.id,
-    cloudPath,
-    url: urlResult.data.publicUrl,
-    size: infoResult.data.size ?? fallback.size,
-    mimeType: infoResult.data.contentType || fallback.mimeType
-  };
+  const fileID = Buffer.from(token, "base64url").toString("utf8");
+  if (Buffer.from(fileID, "utf8").toString("base64url") !== token) {
+    throw new PortfolioStorageError("媒体访问令牌编码无效。");
+  }
+  assertPortfolioFileID(fileID);
+  return fileID;
 }
 
 export async function uploadPortfolioFile(options: {
@@ -78,9 +85,11 @@ export async function uploadPortfolioFile(options: {
   });
 
   if (result.error || !result.data) throw storageFailure("上传", result.error);
-  return getPortfolioFileReference(options.cloudPath, {
+  return {
     fileID: result.data.id,
+    cloudPath: options.cloudPath,
+    url: getPortfolioMediaUrl(result.data.id),
     size: options.bytes.byteLength,
     mimeType: options.mimeType
-  });
+  };
 }

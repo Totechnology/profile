@@ -12,11 +12,7 @@ import {
   usesLocalContentStore
 } from "@/lib/contentStore";
 import { getCloudBaseDatabase } from "@/lib/cloudbase/server";
-import {
-  getPortfolioFileReference,
-  portfolioFileExists,
-  uploadPortfolioFile
-} from "@/lib/cloudbase/storage";
+import { uploadPortfolioFile } from "@/lib/cloudbase/storage";
 import type { SiteContent, SiteSettingsDocument, StoredFileReference } from "@/lib/types";
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -131,18 +127,8 @@ async function migrateLegacyAsset(localUrl: string) {
   const { year, month } = inferLegacyDate(filename);
   const cloudPath = `personal-portfolio/uploads/${year}/${month}/legacy-${hash}${extension}`;
 
-  if (await portfolioFileExists(cloudPath)) {
-    return {
-      reference: await getPortfolioFileReference(cloudPath, {
-        size: bytes.byteLength,
-        mimeType
-      }),
-      inserted: false
-    };
-  }
-
   return {
-    reference: await uploadPortfolioFile({ cloudPath, bytes, mimeType, upsert: false }),
+    reference: await uploadPortfolioFile({ cloudPath, bytes, mimeType, upsert: true }),
     inserted: true
   };
 }
